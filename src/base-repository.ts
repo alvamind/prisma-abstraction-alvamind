@@ -199,4 +199,79 @@ export abstract class BaseRepository<
     this.currentTrx = undefined;
     return result as P;
   }
+
+  /* ====================================================== */
+
+  public async exists(
+    where: Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { where?: infer W } ? W : never
+  ): Promise<boolean> {
+    const result = await this.getClient().findFirst({
+      where,
+      select: { id: true }
+    });
+    this.currentTrx = undefined;
+    return result !== null;
+  }
+
+  public async findManyWithPagination<
+    Args extends Parameters<InstanceType<T>[Model]['findMany']>[0] = Parameters<InstanceType<T>[Model]['findMany']>[0]
+  >(args: {
+    page?: number;
+    pageSize?: number;
+    where?: Args extends { where?: infer W } ? W : never;
+    orderBy?: Args extends { orderBy?: infer O } ? O : never;
+    select?: Args extends { select?: infer S } ? S : never;
+    include?: Args extends { include?: infer I } ? I : never;
+  }) {
+    const page = args.page || 1;
+    const pageSize = args.pageSize || 10;
+
+    const [total, items] = await Promise.all([
+      this.count({ where: args.where }),
+      this.findMany({
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        where: args.where,
+        orderBy: args.orderBy,
+        select: args.select,
+        include: args.include
+      })
+    ]);
+
+    this.currentTrx = undefined;
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+        hasNextPage: page * pageSize < total,
+        hasPreviousPage: page > 1
+      }
+    };
+  }
+
+  public async restoreById<
+    Args extends Parameters<InstanceType<T>[Model]['update']>[0] = Parameters<InstanceType<T>[Model]['update']>[0]
+  >(
+    id: string,
+    data?: Args extends { data?: infer D } ? Omit<D, 'deletedAt'> : never
+  ): Promise<Awaited<ReturnType<InstanceType<T>[Model]['update']>>> {
+    if (!getConfig().softDelete) {
+      throw new Error('prisma-abstraction-alvamind: Restore operation is only available when softDelete is enabled');
+    }
+
+    const result = await this.update({
+      where: { id: id as any },
+      data: {
+        ...data,
+        deletedAt: null
+      }
+    });
+
+    this.currentTrx = undefined;
+    return result;
+  }
+
 }

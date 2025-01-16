@@ -662,4 +662,184 @@ describe('Prisma Abstraction', () => {
       expect(hardDeleted).toBeNull();
     });
   });
+
+  describe('Existence Checks', () => {
+    it('should correctly check if a record exists', async () => {
+      const repo = new UserRepository();
+      await repo.create({
+        data: { email: 'exists@test.com', name: 'Exists Test' }
+      });
+
+      const exists = await repo.exists({ email: 'exists@test.com' });
+      const doesntExist = await repo.exists({ email: 'nonexistent@test.com' });
+
+      expect(exists).toBe(true);
+      expect(doesntExist).toBe(false);
+    });
+
+    it('should work with complex where conditions', async () => {
+      const repo = new UserRepository();
+      await repo.create({
+        data: {
+          email: 'complex@test.com',
+          name: 'Complex Test',
+          status: 'active'
+        }
+      });
+
+      const exists = await repo.exists({
+        AND: [
+          { email: 'complex@test.com' },
+          { status: 'active' }
+        ]
+      });
+
+      expect(exists).toBe(true);
+    });
+  });
+
+  describe('Pagination', () => {
+    it('should return paginated results', async () => {
+      const repo = new UserRepository();
+
+      // Create test data
+      await Promise.all(
+        Array.from({ length: 15 }).map((_, i) =>
+          repo.create({
+            data: {
+              email: `page${i}@test.com`,
+              name: `Page User ${i}`
+            }
+          })
+        )
+      );
+
+      // Test first page
+      const firstPage = await repo.findManyWithPagination({
+        page: 1,
+        pageSize: 10
+      });
+
+      expect(firstPage.items).toHaveLength(10);
+      expect(firstPage.meta.total).toBe(15);
+      expect(firstPage.meta.hasNextPage).toBe(true);
+      expect(firstPage.meta.hasPreviousPage).toBe(false);
+
+      // Test last page
+      const lastPage = await repo.findManyWithPagination({
+        page: 2,
+        pageSize: 10
+      });
+
+      expect(lastPage.items).toHaveLength(5);
+      expect(lastPage.meta.hasNextPage).toBe(false);
+      expect(lastPage.meta.hasPreviousPage).toBe(true);
+    });
+
+    it('should handle filtering with pagination', async () => {
+      const repo = new UserRepository();
+
+      await Promise.all([
+        repo.create({ data: { email: 'active1@test.com', name: 'Active 1', status: 'active' } }),
+        repo.create({ data: { email: 'active2@test.com', name: 'Active 2', status: 'active' } }),
+        repo.create({ data: { email: 'inactive1@test.com', name: 'Inactive 1', status: 'inactive' } }),
+      ]);
+
+      const result = await repo.findManyWithPagination({
+        where: { status: 'active' },
+        pageSize: 5
+      });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.meta.total).toBe(2);
+    });
+  });
+
+  // Restore Operations
+  describe('Restore Operations', () => {
+    beforeEach(() => {
+      setConfig({ softDelete: true });
+    });
+
+    it('should restore a soft-deleted record', async () => {
+      const repo = new UserRepository();
+
+      // Create and delete a user
+      const user = await repo.create({
+        data: { email: 'restore@test.com', name: 'Restore Test' }
+      });
+
+      await repo.delete({
+        where: { id: user.id }
+      });
+
+      // Verify soft deletion
+      const deletedUser = await prisma.user.findUnique({
+        where: { id: user.id }
+      });
+      expect(deletedUser?.deletedAt).toBeDefined();
+
+      // Restore the user
+      const restored = await repo.restoreById(user.id);
+      expect(restored.deletedAt).toBeNull();
+
+      // Verify restoration
+      const restoredUser = await prisma.user.findUnique({
+        where: { id: user.id }
+      });
+      expect(restoredUser?.deletedAt).toBeNull();
+    });
+
+    it('should correctly check if a record exists', async () => {
+      const repo = new UserRepository();
+      await repo.create({  // Remove unused variable
+        data: { email: 'exists@test.com', name: 'Exists Test' }
+      });
+
+      const exists = await repo.exists({ email: 'exists@test.com' });
+      const doesntExist = await repo.exists({ email: 'nonexistent@test.com' });
+
+      expect(exists).toBe(true);
+      expect(doesntExist).toBe(false);
+    });
+
+    // In the pagination test
+    it('should return paginated results', async () => {
+      const repo = new UserRepository();
+
+      // Create test data
+      await Promise.all(  // Remove unused variable
+        Array.from({ length: 15 }).map((_, i) =>
+          repo.create({
+            data: {
+              email: `page${i}@test.com`,
+              name: `Page User ${i}`
+            }
+          })
+        )
+      );
+
+      // Rest of the test remains the same
+      const firstPage = await repo.findManyWithPagination({
+        page: 1,
+        pageSize: 10
+      });
+
+      expect(firstPage.items).toHaveLength(10);
+      expect(firstPage.meta.total).toBe(15);
+      expect(firstPage.meta.hasNextPage).toBe(true);
+      expect(firstPage.meta.hasPreviousPage).toBe(false);
+
+      // Test last page
+      const lastPage = await repo.findManyWithPagination({
+        page: 2,
+        pageSize: 10
+      });
+
+      expect(lastPage.items).toHaveLength(5);
+      expect(lastPage.meta.hasNextPage).toBe(false);
+      expect(lastPage.meta.hasPreviousPage).toBe(true);
+    });;
+
+  });
 });
