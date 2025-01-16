@@ -83,20 +83,20 @@ export abstract class BaseRepository<
     return result;
   }
 
-  public delete = (args: Parameters<InstanceType<T>[Model]['delete']>[0]) => {
+  public async delete(args: Parameters<InstanceType<T>[Model]['delete']>[0]) {
     if (getConfig().softDelete) {
       return this.softDelete(args);
     }
-    const result = this.getClient().delete(args);
+    const result = await this.getClient().delete(args);
     this.currentTrx = undefined;
     return result;
   };
 
-  public deleteMany = (args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]) => {
+  public async deleteMany(args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]) {
     if (getConfig().softDelete) {
       return this.softDeleteMany(args);
     }
-    const result = this.getClient().deleteMany(args);
+    const result = await this.getClient().deleteMany(args);
     this.currentTrx = undefined;
     return result;
   };
@@ -135,20 +135,20 @@ export abstract class BaseRepository<
     return result;
   };
 
-  public updateMany = (args: Parameters<InstanceType<T>[Model]['updateMany']>[0]) => {
-    const result = this.getClient().updateMany(args);
+  public async updateMany(args: Parameters<InstanceType<T>[Model]['updateMany']>[0]) {
+    const result = await this.getClient().updateMany(args);
     this.currentTrx = undefined;
     return result;
   }
 
-  public upsert = (args: Parameters<InstanceType<T>[Model]['upsert']>[0]) => {
-    const result = this.getClient().upsert(args);
+  public async upsert(args: Parameters<InstanceType<T>[Model]['upsert']>[0]) {
+    const result = await this.getClient().upsert(args);
     this.currentTrx = undefined;
     return result;
   };
 
-  public count = (args: Parameters<InstanceType<T>[Model]['count']>[0]) => {
-    const result = this.getClient().count(args);
+  public async count(args: Parameters<InstanceType<T>[Model]['count']>[0]) {
+    const result = await this.getClient().count(args);
     this.currentTrx = undefined;
     return result;
   }
