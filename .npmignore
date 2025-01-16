@@ -1,0 +1,38 @@
+# Ignore development files and directories
+node_modules
+test
+*.test.ts
+*.spec.ts
+coverage
+.nyc_output
+.vscode
+.idea
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Ignore TypeScript related files and directories
+*.tsbuildinfo
+*.d.ts
+
+# Ignore configuration files
+.env
+.env.*
+config/*.json
+
+# Ignore Git related files
+.git
+.gitignore
+
+# Ignore IDE configuration files
+*.suo
+*.user
+*.userprefs
+*.sln
+*.csproj
+*.vcxproj
+
+# Ignore other miscellaneous files
+/build
+/dist
+*.map

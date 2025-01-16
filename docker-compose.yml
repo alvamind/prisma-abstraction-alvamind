@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  postgres-prisma-abstraction:
+    container_name: postgres-prisma-abstraction
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - '54321:5432' # Using unusual port 54321
+    command:
+      - 'postgres'
+      - '-c'
+      - 'max_connections=1000'
+      - '-c'
+      - 'shared_buffers=128MB'
+    tmpfs:
+      - /var/lib/postgresql/data # Using tmpfs for non-persistent storage
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
