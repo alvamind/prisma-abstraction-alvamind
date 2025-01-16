@@ -1,7 +1,7 @@
 // main.test.ts
 import { expect, describe, it, beforeAll, afterAll, beforeEach } from "bun:test";
 import { PrismaClient } from '@prisma/client';
-import { BaseRepository, CachedRepository, setPrismaClient, setConfig } from '../src';
+import { BaseRepository, CachedRepository, setPrismaClient, setConfig, Cache, CacheError, CacheOperation } from '../src';
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { setTimeout } from 'timers/promises';
@@ -77,11 +77,11 @@ class TestLogger {
   }
 }
 
-class TestCache {
+class TestCache implements Cache {
   store = new Map<string, { value: any; expires: number }>();
   hits = 0;
   misses = 0;
-  operations: { type: 'get' | 'set' | 'delete'; key: string; timestamp: Date }[] = [];
+  operations: CacheOperation[] = [];
 
   async get<T>(key: string): Promise<T | null> {
     this.operations.push({ type: 'get', key, timestamp: new Date() });
@@ -102,26 +102,25 @@ class TestCache {
     });
   }
 
+
   async delete(key: string): Promise<void> {
     this.operations.push({ type: 'delete', key, timestamp: new Date() });
-    // If the key contains a wildcard (*), delete all matching keys
-    if (key.includes('*')) {
-      const prefix = key.replace('*', '');
-      for (const storeKey of this.store.keys()) {
-        if (storeKey.startsWith(prefix)) {
-          this.store.delete(storeKey);
-        }
-      }
+    if (key.endsWith('*')) {
+      const prefix = key.slice(0, -1);
+      const keysToDelete = Array.from(this.store.keys())
+        .filter(storeKey => storeKey.startsWith(prefix));
+
+      keysToDelete.forEach(k => this.store.delete(k));
     } else {
       this.store.delete(key);
     }
   }
 
-  clear() {
+  async clear(): Promise<void> {
+    this.operations.push({ type: 'clear', key: '*', timestamp: new Date() });
     this.store.clear();
     this.hits = 0;
     this.misses = 0;
-    this.operations = [];
   }
 }
 
@@ -678,6 +677,134 @@ describe('Prisma Abstraction', () => {
         expect(testCache.hits).toBe(0);
       });
     });
+
+    describe('Cache Flushing', () => {
+      let repo: CachedUserRepository;
+      let testCache: TestCache;
+
+      beforeEach(() => {
+        testCache = new TestCache();
+        repo = new CachedUserRepository(testCache);
+      });
+
+      it('should flush all cache entries', async () => {
+        // Populate cache
+        const user = await repo.create({
+          data: { email: 'flush@test.com', name: 'Flush Test' }
+        });
+
+        await repo.findUnique({ where: { id: user.id } });
+        await repo.findMany({});
+
+        expect(testCache.store.size).toBeGreaterThan(0);
+
+        // Flush all
+        await repo.flushAll();
+
+        expect(testCache.store.size).toBe(0);
+      });
+
+      it('should flush specific operation cache', async () => {
+        // Populate cache with different operations
+        const user = await repo.create({
+          data: { email: 'flush-op@test.com', name: 'Flush Op Test' }
+        });
+
+        await repo.findUnique({ where: { id: user.id } });
+        await repo.findMany({});
+
+        const initialSize = testCache.store.size;
+
+        // Flush only findUnique operations
+        await repo.flushOperation('findUnique');
+
+        // Should have removed only findUnique cache entries
+        expect(testCache.store.size).toBeLessThan(initialSize);
+
+        // findMany cache should still exist
+        const findManyCacheKey = testCache.operations.find((op: CacheOperation) => op.type === 'set' && op.key.includes('findMany'))?.key;
+        expect(testCache.store.has(findManyCacheKey!)).toBe(true);
+      });
+
+      it('should flush exact cache entry', async () => {
+        const user = await repo.create({
+          data: { email: 'flush-exact@test.com', name: 'Flush Exact Test' }
+        });
+
+        const args = { where: { id: user.id } };
+
+        // Cache the findUnique result
+        await repo.findUnique(args);
+
+        // Cache another operation
+        await repo.findMany({});
+
+        const initialSize = testCache.store.size;
+
+        // Flush exact cache entry
+        await repo.flushExact('findUnique', args);
+
+        // Should have removed only the specific cache entry
+        expect(testCache.store.size).toBe(initialSize - 1);
+
+        // The specific cache key should not exist
+        const specificKey = repo['getCacheKey']('findUnique', args);
+        expect(testCache.store.has(specificKey)).toBe(false);
+      });
+
+      it('should handle flush errors gracefully', async () => {
+        const errorCache: TestCache = {
+          ...testCache,
+          get: testCache.get,
+          set: testCache.set,
+          delete: testCache.delete,
+          clear: async () => { throw new Error('Clear failed'); }
+        };
+
+        const errorRepo = new CachedUserRepository(errorCache);
+
+        expect(errorRepo.flushAll()).rejects.toThrow(CacheError);
+      });
+
+      it('should support pattern-based flushing', async () => {
+        // Clear any existing cache
+        await repo.flushAll();
+
+        // Populate cache with various patterns
+        await repo.findMany({ where: { status: 'active' } });
+        await repo.findMany({ where: { status: 'inactive' } });
+        await repo.findFirst({ where: { email: 'test@example.com' } });
+
+        const initialSize = testCache.store.size;
+        expect(initialSize).toBeGreaterThan(0);
+
+        // Flush all findMany operations
+        await repo.flush({ operation: 'findMany' });
+
+        // Verify that only findMany caches were removed
+        expect(testCache.store.size).toBe(initialSize - 2);
+
+        // Find the findFirst cache key
+        const findFirstCacheKey = testCache.operations
+          .find((op: CacheOperation) =>
+            op.type === 'set' &&
+            op.key.includes('findFirst'))?.key;
+
+        expect(findFirstCacheKey).toBeDefined();
+        expect(testCache.store.has(findFirstCacheKey!)).toBe(true);
+
+        // Additional verification
+        const findManyCacheKey = testCache.operations
+          .find((op: CacheOperation) =>
+            op.type === 'set' &&
+            op.key.includes('findMany'))?.key;
+
+        if (findManyCacheKey) {
+          expect(testCache.store.has(findManyCacheKey)).toBe(false);
+        }
+      });
+    })
+
   });
 
   // Raw Queries Tests
@@ -1078,5 +1205,57 @@ describe('Prisma Abstraction', () => {
       expect(lastPage.meta.hasPreviousPage).toBe(true);
     });;
 
+  });
+
+  describe('Granular Cache Control', () => {
+    it('should respect method-level cache options', async () => {
+      const repo = new CachedUserRepository(testCache);
+
+      // Create test user
+      const user = await repo.create({
+        data: { email: 'cache.control@test.com', name: 'Cache Control' }
+      });
+
+      // First call with caching disabled
+      await repo.findUnique(
+        { where: { id: user.id } },
+        { cache: false }
+      );
+      expect(testCache.misses).toBe(0); // Should not even attempt to use cache
+
+      // Second call with custom TTL
+      await repo.findUnique(
+        { where: { id: user.id } },
+        { cache: true, ttl: 60 }
+      );
+      expect(testCache.misses).toBe(1); // Should miss and then cache
+
+      // Third call should hit cache
+      await repo.findUnique(
+        { where: { id: user.id } }
+      );
+      expect(testCache.hits).toBe(1);
+    });
+
+    it('should respect global cache configuration', async () => {
+      // Set global config to disable caching
+      setConfig({ cache: { defaultCaching: false } });
+
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'global.config@test.com', name: 'Global Config' }
+      });
+
+      // Should not use cache by default
+      await repo.findUnique({ where: { id: user.id } });
+      expect(testCache.misses).toBe(0);
+
+      // But should still allow override
+      await repo.findUnique(
+        { where: { id: user.id } },
+        { cache: true }
+      );
+      expect(testCache.misses).toBe(1);
+    });
   });
 });

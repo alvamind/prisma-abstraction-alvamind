@@ -2,60 +2,108 @@
 import { Sql } from '@prisma/client/runtime/library';
 import { BaseRepository } from './base-repository';
 import { getConfig } from './config';
-import { ModelNames, PrismaClientType, Cache } from './types';
+import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern } from './types';
 
 export abstract class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
   protected defaultTTL: number;
+  protected defaultCaching: boolean;
 
   constructor(
     protected cache: Cache,
     defaultTTL: number = 3600 // 1 hour default
   ) {
     super();
-    this.defaultTTL = defaultTTL;
+    const config = getConfig();
+    this.defaultTTL = config.cache?.defaultTTL ?? defaultTTL;
+    this.defaultCaching = config.cache?.defaultCaching ?? true;
   }
 
-  // Enhanced caching for read operations
+  // Modified cacheRead method to handle cache options
   protected async cacheRead<P>(
     operation: string,
     args: any,
-    callback: () => Promise<P>
+    callback: () => Promise<P>,
+    options?: CacheOptions
   ): Promise<P> {
+    const shouldCache = options?.cache ?? this.defaultCaching;
+    const ttl = options?.ttl ?? this.defaultTTL;
+
+    // If caching is disabled, just execute the callback
+    if (!shouldCache) {
+      return callback();
+    }
+
     const cacheKey = this.getCacheKey(operation, args);
 
     try {
-      // Try to get from cache first
       const cached = await this.cache.get<P>(cacheKey);
-      if (cached) {
+      if (cached !== null) { // Changed from if (cached) to explicitly check for null
         return cached;
       }
 
-      // If not in cache, execute operation and cache result
       const result = await callback();
-      if (result) {
-        await this.cache.set(cacheKey, result, this.defaultTTL); // Fixed: Using defaultTTL instead of CACHE_TTL
+      // Only cache if result is not null
+      if (result !== null) {
+        await this.cache.set(cacheKey, result, ttl);
       }
       return result;
 
     } catch (error) {
-      // On cache error, fallback to direct database query
       getConfig().logger?.error(`Cache operation failed: ${error}`);
       return callback();
     }
   }
 
+  // Override methods to use cache options
+  public override async findUnique(
+    args: Parameters<InstanceType<T>[Model]['findUnique']>[0],
+    options?: CacheOptions
+  ) {
+    const result = await this.cacheRead('findUnique', args, () => super.findUnique(args), options);
+    return result;
+  }
+
+  public override async findMany(
+    args: Parameters<InstanceType<T>[Model]['findMany']>[0],
+    options?: CacheOptions
+  ) {
+    const result = await this.cacheRead('findMany', args, () => super.findMany(args), options);
+    return result;
+  }
+
+  public override async findFirst(
+    args: Parameters<InstanceType<T>[Model]['findFirst']>[0],
+    options?: CacheOptions
+  ) {
+    return this.cacheRead('findFirst', args, () => super.findFirst(args), options);
+  }
+
+  public override async count(
+    args: Parameters<InstanceType<T>[Model]['count']>[0],
+    options?: CacheOptions
+  ) {
+    return this.cacheRead('count', args, () => super.count(args), options);
+  }
+
+  public override async $queryRaw<P = any>(
+    query: TemplateStringsArray | Sql,
+    ...values: any[]
+  ): Promise<P> {
+    const lastArg = values[values.length - 1];
+    const options = lastArg && typeof lastArg === 'object' && 'cache' in lastArg ?
+      values.pop() as CacheOptions :
+      undefined;
+
+    return this.cacheRead('$queryRaw', { query, values }, () => super.$queryRaw(query, ...values), options);
+  }
+
   // Cache invalidation for write operations
-  protected async invalidateAfterWrite(operation: string, args: any): Promise<void> {
+  protected async invalidateAfterWrite(_operation: string, _args: any): Promise<void> {
     try {
-      // Clear specific cache entry
-      const cacheKey = this.getCacheKey(operation, args);
-      await this.cache.delete(cacheKey);
-
-      // Clear related list caches
-      await this.cache.delete(`${this.model.$name}:list:*`);
-
+      // Clear all cache entries for this model
+      const modelPrefix = `${this.model.$name}:`;
+      await this.cache.delete(`${modelPrefix}*`);
     } catch (error) {
-      // Log cache invalidation error but don't block operation
       getConfig().logger?.error(`Cache invalidation failed: ${error}`);
     }
   }
@@ -64,39 +112,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
     return `${this.model.$name}:${operation}:${JSON.stringify(args)}`;
   }
 
-  // Override example for read operation
-  public override async findUnique(
-    args: Parameters<InstanceType<T>[Model]['findUnique']>[0]
-  ) {
-    return this.cacheRead('findUnique', args, () => super.findUnique(args));
-  }
-
-  public override async findMany(
-    args: Parameters<InstanceType<T>[Model]['findMany']>[0]
-  ) {
-    return this.cacheRead('findMany', args, () => super.findMany(args));
-  }
-
-  public override async findFirst(
-    args: Parameters<InstanceType<T>[Model]['findFirst']>[0]
-  ) {
-    return this.cacheRead('findFirst', args, () => super.findFirst(args));
-  }
-
-  public override async $queryRaw<P = any>(
-    query: TemplateStringsArray | Sql,
-    ...values: any[]
-  ): Promise<P> {
-    return this.cacheRead('$queryRaw', { query, values }, () => super.$queryRaw(query, ...values));
-  }
-
-  public override async count(
-    args: Parameters<InstanceType<T>[Model]['count']>[0]
-  ) {
-    return this.cacheRead('count', args, () => super.count(args));
-  }
-
-  // Override example for write operation
+  // Override example for write operations
   public override async create(
     args: Parameters<InstanceType<T>[Model]['create']>[0]
   ) {
@@ -160,5 +176,60 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
     const result = await super.upsert(args);
     await this.invalidateAfterWrite('upsert', args);
     return result;
+  }
+
+  /**
+   * Flush cache entries based on pattern
+   */
+
+  public async flush(pattern: FlushPattern = 'all'): Promise<void> {
+    try {
+      if (pattern === 'all') {
+        await this.cache.clear();
+        return;
+      }
+
+      const { operation, args } = pattern;
+      if (operation) {
+        if (args) {
+          // Delete specific cache entry
+          const cacheKey = this.getCacheKey(operation, args);
+          await this.cache.delete(cacheKey);
+        } else {
+          // Delete all entries for specific operation
+          const operationPrefix = `${this.model.$name}:${operation}:`;
+          await this.cache.delete(`${operationPrefix}*`);
+        }
+      } else {
+        // Delete all entries for this model
+        const modelPrefix = `${this.model.$name}:`;
+        await this.cache.delete(`${modelPrefix}*`);
+      }
+    } catch (error) {
+      getConfig().logger?.error(`Cache flush failed: ${error}`);
+      throw new CacheError('Failed to flush cache', error as Error);
+    }
+  }
+
+
+  /**
+   * Flush all cache entries for current model
+   */
+  public async flushAll(): Promise<void> {
+    return this.flush('all');
+  }
+
+  /**
+   * Flush cache entries for specific operation
+   */
+  public async flushOperation(operation: string): Promise<void> {
+    return this.flush({ operation });
+  }
+
+  /**
+   * Flush cache entry for specific operation and arguments
+   */
+  public async flushExact(operation: string, args: Record<string, any>): Promise<void> {
+    return this.flush({ operation, args });
   }
 }
