@@ -14,8 +14,8 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   ) {
     super();
     const config = getConfig();
-    this.defaultTTL = config.cache?.defaultTTL ?? defaultTTL;
-    this.defaultCaching = config.cache?.defaultCaching ?? true;
+    this.defaultTTL = config.cacheConfig?.defaultTTL ?? defaultTTL;
+    this.defaultCaching = config.cacheConfig?.defaultCaching ?? true;
   }
 
   // Modified cacheRead method to handle cache options
@@ -27,27 +27,18 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   ): Promise<P> {
     const shouldCache = options?.cache ?? this.defaultCaching;
     const ttl = options?.ttl ?? this.defaultTTL;
-
-    // If caching is disabled, just execute the callback
     if (!shouldCache) {
       return callback();
     }
-
     const cacheKey = this.getCacheKey(operation, args);
-
     try {
       const cached = await this.cache.get<P>(cacheKey);
-      if (cached !== null) { // Changed from if (cached) to explicitly check for null
+      if (cached) {
         return cached;
       }
-
       const result = await callback();
-      // Only cache if result is not null
-      if (result !== null) {
-        await this.cache.set(cacheKey, result, ttl);
-      }
+      await this.cache.set(cacheKey, result, ttl);
       return result;
-
     } catch (error) {
       getConfig().logger?.error(`Cache operation failed: ${error}`);
       return callback();

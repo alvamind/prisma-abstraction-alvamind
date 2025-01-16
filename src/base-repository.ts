@@ -53,53 +53,61 @@ export abstract class BaseRepository<
   }
 
   public async create(args: Parameters<InstanceType<T>[Model]['create']>[0]) {
-    const result = await this.getClient().create(args);
-    this.currentTrx = undefined;
-    return result;
+    try {
+      return await this.getClient().create(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
-
   public async createMany(args: Parameters<InstanceType<T>[Model]['createMany']>[0]) {
-    const result = await this.getClient().createMany(args);
-    this.currentTrx = undefined;
-    return result;
+    try {
+      return await this.getClient().createMany(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
-
   public async findMany(args: Parameters<InstanceType<T>[Model]['findMany']>[0]) {
-    const result = await this.getClient().findMany(args);
-    this.currentTrx = undefined;
-    return result;
+    try {
+      return await this.getClient().findMany(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
-
   public async findFirst(args: Parameters<InstanceType<T>[Model]['findFirst']>[0]) {
-    const result = await this.getClient().findFirst(args);
-    this.currentTrx = undefined;
-    return result;
+    try {
+      return await this.getClient().findFirst(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
+  public async findUnique(args: Parameters<InstanceType<T>[Model]['findUnique']>[0]) {
+    try {
+      return await this.getClient().findUnique(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
 
-  public findUnique(args: Parameters<InstanceType<T>[Model]['findUnique']>[0]) {
-    const client = this.getClient();
-    const result = client.findUnique(args);
-    this.currentTrx = undefined;
-    return result;
   }
-
   public async delete(args: Parameters<InstanceType<T>[Model]['delete']>[0]) {
-    if (getConfig().softDelete) {
-      return this.softDelete(args);
+    try {
+      if (getConfig().softDelete) {
+        return this.softDelete(args);
+      }
+      return await this.getClient().delete(args);
+    } finally {
+      this.currentTrx = undefined;
     }
-    const result = await this.getClient().delete(args);
-    this.currentTrx = undefined;
-    return result;
-  };
-
+  }
   public async deleteMany(args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]) {
-    if (getConfig().softDelete) {
-      return this.softDeleteMany(args);
+    try {
+      if (getConfig().softDelete) {
+        return this.softDeleteMany(args);
+      }
+      return await this.getClient().deleteMany(args);
+    } finally {
+      this.currentTrx = undefined;
     }
-    const result = await this.getClient().deleteMany(args);
-    this.currentTrx = undefined;
-    return result;
-  };
+  }
 
   protected async softDelete(args: any) {
     if (!args?.where) {
@@ -128,88 +136,89 @@ export abstract class BaseRepository<
     return result;
   };
 
-  public update(args: Parameters<InstanceType<T>[Model]['update']>[0]) {
-    const client = this.getClient();
-    const result = client.update(args);
-    this.currentTrx = undefined;
-    return result;
-  };
-
-  public async updateMany(args: Parameters<InstanceType<T>[Model]['updateMany']>[0]) {
-    const result = await this.getClient().updateMany(args);
-    this.currentTrx = undefined;
-    return result;
+  public async update(args: Parameters<InstanceType<T>[Model]['update']>[0]) {
+    try {
+      return await this.getClient().update(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
-
+  public async updateMany(args: Parameters<InstanceType<T>[Model]['updateMany']>[0]) {
+    try {
+      return await this.getClient().updateMany(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
+  }
   public async upsert(args: Parameters<InstanceType<T>[Model]['upsert']>[0]) {
-    const result = await this.getClient().upsert(args);
-    this.currentTrx = undefined;
-    return result;
-  };
-
+    try {
+      return await this.getClient().upsert(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
+  }
   public async count(args: Parameters<InstanceType<T>[Model]['count']>[0]) {
-    const result = await this.getClient().count(args);
-    this.currentTrx = undefined;
-    return result;
+    try {
+      return await this.getClient().count(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
+  }
+  public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
+    try {
+      if (!query) throw new Error('prisma-abstraction-alvamind: Query is required');
+      const client = this.currentTrx ?? this.prisma;
+      return await client.$executeRaw.apply(client, [query, ...values]);
+    } finally {
+      this.currentTrx = undefined;
+    }
+  }
+  public async $queryRaw<P = any>(
+    query: TemplateStringsArray | Sql,
+    ...values: any[]
+  ): Promise<P> {
+    try {
+      const client = this.currentTrx ?? this.prisma;
+      return await client.$queryRaw.apply(client, [query, ...values]) as P;
+    } finally {
+      this.currentTrx = undefined;
+    }
   }
 
   public async $transaction<P>(fn: (prisma: TransactionClient) => Promise<P>, options?: { timeout?: number }): Promise<P> {
     const timeout = options?.timeout ?? 5000;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
     try {
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('prisma-abstraction-alvamind: Transaction timeout')), timeout);
       });
-
       const result = await Promise.race([
         this.prisma.$transaction(fn),
         timeoutPromise
       ]);
-
-      if (timeoutId) clearTimeout(timeoutId);
-      this.currentTrx = undefined;
+      if (timeoutId) clearTimeout(timeoutId)
       return result;
     } catch (e) {
+      throw e
+    } finally {
       if (timeoutId) clearTimeout(timeoutId);
       this.currentTrx = undefined;
-      throw e;
     }
-  }
-
-  public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
-    try {
-      if (!query) throw new Error('prisma-abstraction-alvamind: Query is required');
-      const client = this.currentTrx ?? this.prisma;
-      const result = await client.$executeRaw.apply(client, [query, ...values]);
-      this.currentTrx = undefined;
-      return result;
-    } catch (e) {
-      this.currentTrx = undefined;
-      throw e;
-    }
-  }
-
-  public async $queryRaw<P = any>(
-    query: TemplateStringsArray | Sql,
-    ...values: any[]
-  ): Promise<P> {
-    const client = this.currentTrx ?? this.prisma;
-    const result = await client.$queryRaw.apply(client, [query, ...values]);
-    this.currentTrx = undefined;
-    return result as P;
   }
 
   /* ====================================================== */
 
-  public async exists(
-    where: Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { where?: infer W } ? W : never
+  public async isExist<
+    Where extends Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { where?: infer W } ? W : never,
+    Select extends Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { select?: infer S } ? S : never
+  >(
+    where: Where,
+    select?: Select
   ): Promise<boolean> {
     const result = await this.getClient().findFirst({
       where,
-      select: { id: true }
+      select: select ? select : { id: true } as any
     });
-    this.currentTrx = undefined;
     return result !== null;
   }
 

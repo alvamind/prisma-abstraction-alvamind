@@ -37,7 +37,7 @@ export interface GlobalCacheConfig {
 export interface Config {
   logger?: Logger;
   softDelete?: boolean;
-  cache?: GlobalCacheConfig;
+  cacheConfig?: GlobalCacheConfig;
   transactionOptions?: TransactionOptions;
 }
 

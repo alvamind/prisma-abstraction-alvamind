@@ -16,7 +16,7 @@
     "commit": "commit",
     "reinstall": "bun clean && bun install",
     "build": "tsc -p tsconfig.build.json",
-    "source": "generate-source --exclude=**/dist/**,.gitignore,bun.lockb,*md,*.test.ts --output=source.md",
+    "source": "generate-source --exclude=**/dist/**,.gitignore,bun.lockb,*md --output=source.md",
     "clean": "clean",
     "build:tgz": "bun run build && bun pm pack",
     "test": "bun test test/*.test.ts",

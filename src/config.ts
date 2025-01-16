@@ -5,7 +5,12 @@ import { PrismaClient } from '@prisma/client';
 let prismaInstance: PrismaClient | null = null;
 let globalConfig: Config = {
   softDelete: false,
-  logger: console
+  logger: {
+    info: () => { },
+    error: () => { },
+    warn: () => { },
+    debug: () => { },
+  },
 };
 let initialized = false;
 
