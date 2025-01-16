@@ -30,7 +30,11 @@ export abstract class BaseRepository<
 
   private getModelName(): Model {
     const className = this.constructor.name;
-    const modelName = className.replace('Repository', '').toLowerCase();
+    // Remove 'Repository' and 'Cached' from the name
+    const modelName = className
+      .replace(/Repository$/, '')
+      .replace(/^Cached/, '')
+      .toLowerCase();
     return modelName as Model;
   }
 
@@ -48,35 +52,36 @@ export abstract class BaseRepository<
     return client as InstanceType<T>[Model];
   }
 
-  public create = (args: Parameters<InstanceType<T>[Model]['create']>[0]) => {
-    const result = this.getClient().create(args);
-    this.currentTrx = undefined;
-    return result;
-  };
-
-  public createMany = (args: Parameters<InstanceType<T>[Model]['createMany']>[0]) => {
-    const result = this.getClient().createMany(args);
+  public async create(args: Parameters<InstanceType<T>[Model]['create']>[0]) {
+    const result = await this.getClient().create(args);
     this.currentTrx = undefined;
     return result;
   }
 
-  public findMany = (args: Parameters<InstanceType<T>[Model]['findMany']>[0]) => {
-    const result = this.getClient().findMany(args);
+  public async createMany(args: Parameters<InstanceType<T>[Model]['createMany']>[0]) {
+    const result = await this.getClient().createMany(args);
     this.currentTrx = undefined;
     return result;
-  };
+  }
 
-  public findFirst = (args: Parameters<InstanceType<T>[Model]['findFirst']>[0]) => {
-    const result = this.getClient().findFirst(args);
+  public async findMany(args: Parameters<InstanceType<T>[Model]['findMany']>[0]) {
+    const result = await this.getClient().findMany(args);
     this.currentTrx = undefined;
     return result;
-  };
+  }
 
-  public findUnique = (args: Parameters<InstanceType<T>[Model]['findUnique']>[0]) => {
-    const result = this.getClient().findUnique(args);
+  public async findFirst(args: Parameters<InstanceType<T>[Model]['findFirst']>[0]) {
+    const result = await this.getClient().findFirst(args);
     this.currentTrx = undefined;
     return result;
-  };
+  }
+
+  public findUnique(args: Parameters<InstanceType<T>[Model]['findUnique']>[0]) {
+    const client = this.getClient();
+    const result = client.findUnique(args);
+    this.currentTrx = undefined;
+    return result;
+  }
 
   public delete = (args: Parameters<InstanceType<T>[Model]['delete']>[0]) => {
     if (getConfig().softDelete) {
@@ -123,8 +128,9 @@ export abstract class BaseRepository<
     return result;
   };
 
-  public update = (args: Parameters<InstanceType<T>[Model]['update']>[0]) => {
-    const result = this.getClient().update(args);
+  public update(args: Parameters<InstanceType<T>[Model]['update']>[0]) {
+    const client = this.getClient();
+    const result = client.update(args);
     this.currentTrx = undefined;
     return result;
   };

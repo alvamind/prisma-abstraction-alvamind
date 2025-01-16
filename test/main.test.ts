@@ -104,7 +104,17 @@ class TestCache {
 
   async delete(key: string): Promise<void> {
     this.operations.push({ type: 'delete', key, timestamp: new Date() });
-    this.store.delete(key);
+    // If the key contains a wildcard (*), delete all matching keys
+    if (key.includes('*')) {
+      const prefix = key.replace('*', '');
+      for (const storeKey of this.store.keys()) {
+        if (storeKey.startsWith(prefix)) {
+          this.store.delete(storeKey);
+        }
+      }
+    } else {
+      this.store.delete(key);
+    }
   }
 
   clear() {
@@ -454,9 +464,14 @@ describe('Prisma Abstraction', () => {
     });
 
     it('should execute raw updates', async () => {
+      // First create a user to update
+      await new UserRepository().create({
+        data: { email: 'test.raw@example.com', name: 'Raw User' }
+      });
+
       const affected = await new UserRepository().$executeRaw`
-        UPDATE "User" SET "name" = 'Updated via Raw' WHERE email LIKE 'test.raw@%'
-      `;
+            UPDATE "User" SET "name" = 'Updated via Raw' WHERE email LIKE 'test.raw@%'
+        `;
 
       expect(affected).toBeGreaterThan(0);
     });

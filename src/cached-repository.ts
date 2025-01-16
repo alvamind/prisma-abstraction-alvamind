@@ -34,39 +34,52 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
       return result;
     } catch (e) {
       getConfig().logger?.error(`Cache operation failed: ${e}`);
-      // Fallback to direct database query on cache failure
       return fn();
     }
   }
 
-  public findUnique = async (
+  public override async findUnique(
     args: Parameters<InstanceType<T>[Model]['findUnique']>[0]
-  ) => {
-    const cacheKey = `${this.model.$name}:unique:${JSON.stringify(args)}`;
+  ) {
+    const cacheKey = this.generateCacheKey('findUnique', args);
     return this.withCache(
       cacheKey,
-      async () => await BaseRepository.prototype.findUnique.call(this, args)
+      () => super.findUnique(args)
     );
-  };
+  }
 
-  public override update = async (
-    args: Parameters<InstanceType<T>[Model]['update']>[0]
-  ) => {
-    const result = await this.getClient().update(args);
-    await this.invalidateCache();
-    this.currentTrx = undefined;
+  public override async update<UpdateArgs extends Record<string, any>>(
+    args: UpdateArgs
+  ) {
+    // First perform the update
+    const result = await super.update(args);
+
+    // Generate cache key for the specific record
+    const cacheKey = this.generateCacheKey('findUnique', { where: args['where'] });
+    await this.cache.delete(cacheKey);
+
+    // Also invalidate any list caches
+    await this.invalidateListCaches();
+
     return result;
-  };
+  }
+
+  protected async invalidateListCaches(): Promise<void> {
+    try {
+      // Delete any cache entries that contain lists of records
+      const listCacheKey = `${this.cacheKeyPrefix}findMany:*`;
+      await this.cache.delete(listCacheKey);
+    } catch (e) {
+      getConfig().logger?.error(`Cache invalidation failed: ${e}`);
+    }
+  }
 
   protected async invalidateCache(): Promise<void> {
     try {
-      // Invalidate all cached entries for this model
-      const cachePattern = `${this.cacheKeyPrefix}*`;
-      await this.cache.delete(cachePattern);
+      // Delete all cache entries for this model
+      await this.cache.delete(`${this.cacheKeyPrefix}*`);
     } catch (e) {
       getConfig().logger?.error(`Cache invalidation failed: ${e}`);
     }
   }
 }
-
-// Add more cached methods as needed
