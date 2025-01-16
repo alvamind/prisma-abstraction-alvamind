@@ -1,9 +1,11 @@
 // src/types.ts
+
 import { PrismaClient } from '@prisma/client';
 
 export type PrismaClientType = new () => any;
 export type ModelNames<T extends PrismaClientType> = keyof Omit<InstanceType<T>, keyof Function>;
 export type TransactionClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
+
 
 export interface CacheOperation {
   type: 'get' | 'set' | 'delete' | 'clear';
@@ -32,31 +34,19 @@ export interface GlobalCacheConfig {
   defaultCaching?: boolean;
   defaultTTL?: number;
 }
-
-// Update the existing Config interface
 export interface Config {
   logger?: Logger;
   softDelete?: boolean;
-  cacheConfig?: GlobalCacheConfig;
+  cacheConfig?: GlobalCacheConfig & {
+    cacheKeySanitizer?: (key: string, args?: any) => string | undefined;
+  };
   transactionOptions?: TransactionOptions;
 }
-
-
 export interface Logger {
   info(message: string, ...args: any[]): void;
   error(message: string, ...args: any[]): void;
   warn(message: string, ...args: any[]): void;
   debug(message: string, ...args: any[]): void;
-}
-
-export interface Config {
-  logger?: Logger;
-  softDelete?: boolean;
-  cacheOptions?: {
-    ttl: number;
-    prefix?: string;
-  };
-  transactionOptions?: TransactionOptions;
 }
 
 export interface TransactionOptions {

@@ -1456,8 +1456,8 @@ describe('Prisma Abstraction', () => {
       await repo.create({
         data: { email: 'exists@test.com', name: 'Exists Test' }
       });
-      const exists = await repo.exists({ email: 'exists@test.com' });
-      const doesntExist = await repo.exists({ email: 'nonexistent@test.com' });
+      const exists = await repo.isExist({ email: 'exists@test.com' });
+      const doesntExist = await repo.isExist({ email: 'nonexistent@test.com' });
       expect(exists).toBe(true);
       expect(doesntExist).toBe(false);
     });
@@ -1470,7 +1470,7 @@ describe('Prisma Abstraction', () => {
           status: 'active'
         }
       });
-      const exists = await repo.exists({
+      const exists = await repo.isExist({
         AND: [
           { email: 'complex@test.com' },
           { status: 'active' }
@@ -1545,16 +1545,6 @@ describe('Prisma Abstraction', () => {
         where: { id: user.id }
       });
       expect(restoredUser?.deletedAt).toBeNull();
-    });
-    it('should correctly check if a record exists', async () => {
-      const repo = new UserRepository();
-      await repo.create({  // Remove unused variable
-        data: { email: 'exists@test.com', name: 'Exists Test' }
-      });
-      const exists = await repo.exists({ email: 'exists@test.com' });
-      const doesntExist = await repo.exists({ email: 'nonexistent@test.com' });
-      expect(exists).toBe(true);
-      expect(doesntExist).toBe(false);
     });
     it('should return paginated results', async () => {
       const repo = new UserRepository();

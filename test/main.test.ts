@@ -5,6 +5,7 @@ import { BaseRepository, CachedRepository, setPrismaClient, setConfig, Cache, Ca
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { setTimeout } from 'timers/promises';
+import { defaultSanitizeKey } from "../src/utils";
 
 // Unique database name for isolation
 const TEST_DB_NAME = `test_db_${randomUUID().replace(/-/g, '_')}`;
@@ -86,10 +87,12 @@ class TestCache implements Cache {
   async get<T>(key: string): Promise<T | null> {
     this.operations.push({ type: 'get', key, timestamp: new Date() });
     const item = this.store.get(key);
-    if (!item || item.expires < Date.now()) {
+
+    if (!item || (item.expires && item.expires < Date.now())) {
       this.misses++;
       return null;
     }
+
     this.hits++;
     return item.value as T;
   }
@@ -102,15 +105,16 @@ class TestCache implements Cache {
     });
   }
 
-
   async delete(key: string): Promise<void> {
     this.operations.push({ type: 'delete', key, timestamp: new Date() });
-    if (key.endsWith('*')) {
-      const prefix = key.slice(0, -1);
-      const keysToDelete = Array.from(this.store.keys())
-        .filter(storeKey => storeKey.startsWith(prefix));
 
-      keysToDelete.forEach(k => this.store.delete(k));
+    if (key.endsWith('*')) {
+      const prefix = key.slice(0, -1).toLowerCase();
+      for (const storeKey of this.store.keys()) {
+        if (storeKey.toLowerCase().startsWith(prefix)) {
+          this.store.delete(storeKey);
+        }
+      }
     } else {
       this.store.delete(key);
     }
@@ -231,11 +235,11 @@ describe('Prisma Abstraction', () => {
       }
     }
 
-    // Setup logging events
+    // @ts-ignore
     prisma.$on('query', (e: any) => {
       testLogger.debug('Query', e);
     });
-
+    // @ts-ignore
     prisma.$on('error', (e: any) => {
       testLogger.error('Prisma Error', e);
     });
@@ -1231,4 +1235,161 @@ describe('Prisma Abstraction', () => {
       expect(testCache.misses).toBe(1);
     });
   });
+
+  describe('Default Key Sanitization Consistency', () => {
+    it('should produce consistent output across multiple calls', () => {
+      const input = 'hello.world';
+
+      // Multiple calls should produce same output
+      const results = new Set();
+      for (let i = 0; i < 1000; i++) {
+        results.add(defaultSanitizeKey(input));
+      }
+
+      // Should only have one unique result
+      expect(results.size).toBe(1);
+      expect(results.has('aGVsbG8ud29ybGQ')).toBe(true);
+    });
+
+    it('should produce same output for known test cases', () => {
+      const testCases = [
+        { input: 'hello.world', expected: 'aGVsbG8ud29ybGQ' },
+        { input: 'test.123', expected: 'dGVzdC4xMjM' },
+        { input: 'foo/bar', expected: 'Zm9vL2Jhcg' },
+        { input: 'user-id_123', expected: 'dXNlci1pZF8xMjM' }
+      ];
+
+      testCases.forEach(({ input, expected }) => {
+        expect(defaultSanitizeKey(input)).toBe(expected);
+      });
+    });
+
+    // Test with different character encodings
+    it('should handle different character encodings consistently', () => {
+      const input = 'hello.world';
+      const utf8Result = defaultSanitizeKey(input);
+      const asciiResult = defaultSanitizeKey(Buffer.from(input, 'ascii').toString());
+      // Remove UTF-16 test as it's not relevant for our use case
+
+      expect(utf8Result).toBe('aGVsbG8ud29ybGQ');
+      expect(asciiResult).toBe('aGVsbG8ud29ybGQ');
+    });;
+
+    // Test consistency of encoding between Buffer and string inputs
+    it('should produce consistent results for Buffer and string inputs', () => {
+      const stringInput = 'hello.world';
+      const bufferInput = Buffer.from('hello.world');
+
+      const stringResult = defaultSanitizeKey(stringInput);
+      const bufferResult = defaultSanitizeKey(bufferInput.toString());
+
+      expect(stringResult).toBe(bufferResult);
+      expect(stringResult).toBe('aGVsbG8ud29ybGQ');
+    });
+  })
+
+  describe('Cache Key Sanitization', () => {
+    let testCache: TestCache;
+
+    beforeEach(() => {
+      testCache = new TestCache();
+    });
+
+    it('should sanitize cache keys with custom sanitizer', async () => {
+      const customSanitizer = (key: string) =>
+        Buffer.from(key.toLowerCase()).toString('base64url');
+
+      setConfig({
+        cacheConfig: {
+          cacheKeySanitizer: customSanitizer
+        }
+      });
+
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+
+      await repo.findUnique({ where: { id: user.id } });
+
+      const operation = testCache.operations.find(op => op.type === 'set');
+      const customKey = customSanitizer(`user:findUnique:{"where":{"id":"${user.id}"}}`);
+      expect(operation?.key).toBe(customKey);
+    });
+
+    it('should sanitize cache keys with default sanitizer', async () => {
+      setConfig({}); // Use default sanitizer
+
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+
+      await repo.findUnique({ where: { id: user.id } });
+
+      const operation = testCache.operations.find(op => op.type === 'set');
+      const expectedKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
+      expect(operation?.key).toBe(expectedKey);
+    });
+
+    it('should not sanitize keys if sanitizer is not provided', async () => {
+      setConfig({
+        cacheConfig: {
+          cacheKeySanitizer: null as any
+        }
+      });
+
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+
+      await repo.findUnique({ where: { id: user.id } });
+
+      const operation = testCache.operations.find(op => op.type === 'set');
+      const defaultKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
+      expect(operation?.key).toBe(defaultKey);
+    });
+
+    it('should handle undefined return from custom sanitizer', async () => {
+      setConfig({
+        cacheConfig: {
+          cacheKeySanitizer: () => undefined
+        }
+      });
+
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+
+      await repo.findUnique({ where: { id: user.id } });
+
+      const operation = testCache.operations.find(op => op.type === 'set');
+      const defaultKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
+      expect(operation?.key).toBe(defaultKey);
+    });
+
+    it('should produce consistent keys for same operations', async () => {
+      const repo = new CachedUserRepository(testCache);
+      const user = await repo.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+
+      // First operation
+      await repo.findUnique({ where: { id: user.id } });
+      const firstKey = testCache.operations.find(op => op.type === 'set')?.key!;
+      expect(firstKey).toBeDefined();
+
+      // Clear operations
+      testCache.operations = [];
+
+      // Second identical operation
+      await repo.findUnique({ where: { id: user.id } });
+      const secondKey = testCache.operations.find(op => op.type === 'set')?.key!;
+      expect(secondKey).toBeDefined();
+
+      expect(firstKey).toBe(secondKey);
+    });
+  })
 });

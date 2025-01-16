@@ -3,6 +3,7 @@ import { Sql } from '@prisma/client/runtime/library';
 import { BaseRepository } from './base-repository';
 import { getConfig } from './config';
 import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern } from './types';
+import { defaultSanitizeKey } from './utils';
 
 export abstract class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
   protected defaultTTL: number;
@@ -18,32 +19,6 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
     this.defaultCaching = config.cacheConfig?.defaultCaching ?? true;
   }
 
-  // Modified cacheRead method to handle cache options
-  protected async cacheRead<P>(
-    operation: string,
-    args: any,
-    callback: () => Promise<P>,
-    options?: CacheOptions
-  ): Promise<P> {
-    const shouldCache = options?.cache ?? this.defaultCaching;
-    const ttl = options?.ttl ?? this.defaultTTL;
-    if (!shouldCache) {
-      return callback();
-    }
-    const cacheKey = this.getCacheKey(operation, args);
-    try {
-      const cached = await this.cache.get<P>(cacheKey);
-      if (cached) {
-        return cached;
-      }
-      const result = await callback();
-      await this.cache.set(cacheKey, result, ttl);
-      return result;
-    } catch (error) {
-      getConfig().logger?.error(`Cache operation failed: ${error}`);
-      return callback();
-    }
-  }
 
   // Override methods to use cache options
   public override async findUnique(
@@ -91,17 +66,64 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   // Cache invalidation for write operations
   protected async invalidateAfterWrite(_operation: string, _args: any): Promise<void> {
     try {
-      // Clear all cache entries for this model
-      const modelPrefix = `${this.model.$name}:`;
+      const modelPrefix = `${this.model.$name.toLowerCase()}:`;
       await this.cache.delete(`${modelPrefix}*`);
     } catch (error) {
       getConfig().logger?.error(`Cache invalidation failed: ${error}`);
     }
   }
 
-  private getCacheKey(operation: string, args: any): string {
-    return `${this.model.$name}:${operation}:${JSON.stringify(args)}`;
+  // In cached-repository.ts
+  protected async cacheRead<P>(
+    operation: string,
+    args: any,
+    callback: () => Promise<P>,
+    options?: CacheOptions
+  ): Promise<P> {
+    const shouldCache = options?.cache ?? this.defaultCaching;
+    const ttl = options?.ttl ?? this.defaultTTL;
+
+    if (!shouldCache) {
+      return callback();
+    }
+
+    const cacheKey = this.getCacheKey(operation, args);
+
+    try {
+      const cached = await this.cache.get<P>(cacheKey);
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await callback();
+      // Only cache non-null results
+      if (result !== null) {
+        await this.cache.set(cacheKey, result, ttl);
+      }
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return callback();
+    }
   }
+
+
+
+
+  private getCacheKey(operation: string, args: any): string {
+    const modelName = this.model.$name.toLowerCase();
+    operation = operation.toLowerCase();
+    const key = `${modelName}:${operation}:${JSON.stringify(args)}`;
+
+    const config = getConfig();
+    if (config.cacheConfig?.cacheKeySanitizer) {
+      const sanitized = config.cacheConfig.cacheKeySanitizer(key);
+      if (sanitized) return sanitized;
+    }
+
+    return defaultSanitizeKey(key);
+  }
+
 
   // Override example for write operations
   public override async create(
@@ -181,6 +203,8 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
       }
 
       const { operation, args } = pattern;
+      const modelName = this.model.$name.toLowerCase();
+
       if (operation) {
         if (args) {
           // Delete specific cache entry
@@ -188,19 +212,19 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
           await this.cache.delete(cacheKey);
         } else {
           // Delete all entries for specific operation
-          const operationPrefix = `${this.model.$name}:${operation}:`;
+          const operationPrefix = `${modelName}:${operation.toLowerCase()}:`;
           await this.cache.delete(`${operationPrefix}*`);
         }
       } else {
         // Delete all entries for this model
-        const modelPrefix = `${this.model.$name}:`;
-        await this.cache.delete(`${modelPrefix}*`);
+        await this.cache.delete(`${modelName}:*`);
       }
     } catch (error) {
       getConfig().logger?.error(`Cache flush failed: ${error}`);
       throw new CacheError('Failed to flush cache', error as Error);
     }
   }
+
 
 
   /**
