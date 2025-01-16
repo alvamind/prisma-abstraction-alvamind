@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { BaseRepository, CachedRepository, setPrismaClient, setConfig } from '../src';
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
+import { setTimeout } from 'timers/promises';
 
 // Unique database name for isolation
 const TEST_DB_NAME = `test_db_${randomUUID().replace(/-/g, '_')}`;
@@ -142,7 +143,7 @@ async function waitForDatabase() {
       execDockerCommand('pg_isready -q');
       return;
     } catch (e) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await setTimeout(1000);
     }
   }
   throw new Error('Database connection timeout');
@@ -187,6 +188,15 @@ describe('Prisma Abstraction', () => {
     // Set database URL with correct port from docker-compose
     process.env['DATABASE_URL'] = DATABASE_URL;
 
+    // Generate Prisma client
+    execSync('bunx prisma generate', {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        DATABASE_URL
+      }
+    });
+
     // Push schema
     execSync('bunx prisma db push --force-reset', {
       stdio: 'inherit',
@@ -201,32 +211,27 @@ describe('Prisma Abstraction', () => {
     while (retries > 0) {
       try {
         prisma = new PrismaClient({
-          datasourceUrl: DATABASE_URL,
-          log: [
-            { level: 'query', emit: 'event' },
-            { level: 'error', emit: 'event' },
-            { level: 'warn', emit: 'event' },
-          ],
+          datasourceUrl: DATABASE_URL
         });
         await prisma.$connect();
         break;
       } catch (e) {
         retries--;
         if (retries === 0) throw e;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await setTimeout(1000);
       }
     }
 
     // Setup logging events
-    prisma.$on('query', (e: unknown) => {
+    prisma.$on('query', (e: any) => {
       testLogger.debug('Query', e);
     });
 
-    prisma.$on('error', (e: unknown) => {
+    prisma.$on('error', (e: any) => {
       testLogger.error('Prisma Error', e);
     });
 
-    setPrismaClient(prisma);
+    setPrismaClient(prisma); // Initialize abstraction
   });
 
   beforeEach(async () => {
@@ -359,10 +364,6 @@ describe('Prisma Abstraction', () => {
   // Transaction Support Tests
   describe('Transaction Support', () => {
     it('should handle successful transactions', async () => {
-      const timeout = setTimeout(() => {
-        throw new Error('Transaction timeout');
-      }, 5000);
-
       try {
         const [user1, user2] = await new UserRepository().$transaction(async (trx) => {
           const u1 = await new UserRepository().withTrx(trx).create({
@@ -375,12 +376,10 @@ describe('Prisma Abstraction', () => {
 
           return [u1, u2];
         });
-
-        clearTimeout(timeout);
         expect(user1.email).toBe('test.trx1@example.com');
         expect(user2.email).toBe('test.trx2@example.com');
       } catch (e) {
-        clearTimeout(timeout);
+
         throw e;
       }
     });
