@@ -10,13 +10,22 @@ export abstract class BaseRepository<
 > {
   protected model: InstanceType<T>[Model];
   protected prisma: PrismaClient;
-  private currentTrx?: TransactionClient;
+  protected currentTrx?: TransactionClient;
 
   constructor() {
-    const modelName = this.getModelName();
-    this.prisma = getPrismaClient();
-    this.model = this.prisma[modelName as keyof PrismaClient] as InstanceType<T>[Model];
-    getConfig().logger?.info(`${String(modelName)} Repository initialized`);
+    try {
+      const modelName = this.getModelName();
+      this.prisma = getPrismaClient();
+      // Add type check to prevent runtime errors
+      if (!(modelName in this.prisma)) {
+        throw new Error(`prisma-abstraction-alvamind: Invalid model name: ${String(modelName)}`);
+      }
+      this.model = this.prisma[modelName as keyof PrismaClient] as InstanceType<T>[Model];
+      getConfig().logger?.info(`${String(modelName)} Repository initialized`);
+    } catch (e) {
+      getConfig().logger?.error(`prisma-abstraction-alvamind:: Repository initialization failed: ${e}`);
+      throw e;
+    }
   }
 
   private getModelName(): Model {
@@ -30,8 +39,13 @@ export abstract class BaseRepository<
     return this;
   }
 
+  // Add cleanup for transaction reference
   protected getClient(): InstanceType<T>[Model] {
-    return (this.currentTrx?.[this.model.$name as keyof TransactionClient] ?? this.model) as InstanceType<T>[Model];
+    const client = this.currentTrx?.[this.model.$name as keyof TransactionClient] ?? this.model;
+    if (!client) {
+      throw new Error('prisma-abstraction-alvamind: Invalid prisma client state');
+    }
+    return client as InstanceType<T>[Model];
   }
 
   public create = (args: Parameters<InstanceType<T>[Model]['create']>[0]) => {
@@ -82,8 +96,11 @@ export abstract class BaseRepository<
     return result;
   };
 
-  protected softDelete = (args: any) => {
-    const result = this.update({
+  protected async softDelete(args: any) {
+    if (!args?.where) {
+      throw new Error('prisma-abstraction-alvamind: Where clause is required for soft delete');
+    }
+    const result = await this.update({
       where: args.where,
       data: {
         ...(args.data || {}),
@@ -92,7 +109,7 @@ export abstract class BaseRepository<
     });
     this.currentTrx = undefined;
     return result;
-  };
+  }
 
   protected softDeleteMany = (args: any) => {
     const result = this.updateMany({
@@ -130,22 +147,41 @@ export abstract class BaseRepository<
     return result;
   }
 
-  public async $transaction<P>(
-    fn: (prisma: TransactionClient) => Promise<P>
-  ): Promise<P> {
-    const result = await this.prisma.$transaction(fn);
-    this.currentTrx = undefined;
-    return result;
+  public async $transaction<P>(fn: (prisma: TransactionClient) => Promise<P>, options?: { timeout?: number }): Promise<P> {
+    const timeout = options?.timeout ?? 5000;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('prisma-abstraction-alvamind: Transaction timeout')), timeout);
+      });
+
+      const result = await Promise.race([
+        this.prisma.$transaction(fn),
+        timeoutPromise
+      ]);
+
+      if (timeoutId) clearTimeout(timeoutId);
+      this.currentTrx = undefined;
+      return result;
+    } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
+      this.currentTrx = undefined;
+      throw e;
+    }
   }
 
-  public async $executeRaw(
-    query: TemplateStringsArray | Sql,
-    ...values: any[]
-  ): Promise<number> {
-    const client = this.currentTrx ?? this.prisma;
-    const result = await client.$executeRaw.apply(client, [query, ...values]);
-    this.currentTrx = undefined;
-    return result;
+  public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
+    try {
+      if (!query) throw new Error('prisma-abstraction-alvamind: Query is required');
+      const client = this.currentTrx ?? this.prisma;
+      const result = await client.$executeRaw.apply(client, [query, ...values]);
+      this.currentTrx = undefined;
+      return result;
+    } catch (e) {
+      this.currentTrx = undefined;
+      throw e;
+    }
   }
 
   public async $queryRaw<P = any>(

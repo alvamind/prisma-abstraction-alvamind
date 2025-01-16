@@ -1,22 +1,21 @@
 // src/cached-repository.ts
 import { BaseRepository } from './base-repository';
-import { ModelNames, PrismaClientType } from './types';
+import { getConfig } from './config';
+import { ModelNames, PrismaClientType, Cache } from './types';
 
-export interface Cache {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T, ttl?: number): Promise<void>;
-  delete(key: string): Promise<void>;
-}
+export abstract class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
+  private cacheKeyPrefix: string;
 
-export abstract class CachedRepository<
-  T extends PrismaClientType,
-  Model extends ModelNames<T>
-> extends BaseRepository<T, Model> {
   constructor(
     protected cache: Cache,
     protected defaultTTL: number = 3600
   ) {
     super();
+    this.cacheKeyPrefix = `${this.model.$name}:`;
+  }
+
+  protected generateCacheKey(operation: string, args: any): string {
+    return `${this.cacheKeyPrefix}${operation}:${JSON.stringify(args)}`;
   }
 
   protected async withCache<P>(
@@ -24,12 +23,20 @@ export abstract class CachedRepository<
     fn: () => Promise<P>,
     ttl: number = this.defaultTTL
   ): Promise<P> {
-    const cached = await this.cache.get<P>(key);
-    if (cached) return cached;
+    try {
+      const cached = await this.cache.get<P>(key);
+      if (cached !== null) return cached;
 
-    const result = await fn();
-    await this.cache.set(key, result, ttl);
-    return result;
+      const result = await fn();
+      if (result !== null && result !== undefined) {
+        await this.cache.set(key, result, ttl);
+      }
+      return result;
+    } catch (e) {
+      getConfig().logger?.error(`Cache operation failed: ${e}`);
+      // Fallback to direct database query on cache failure
+      return fn();
+    }
   }
 
   public findUnique = async (
@@ -42,5 +49,24 @@ export abstract class CachedRepository<
     );
   };
 
-  // Add more cached methods as needed
+  public override update = async (
+    args: Parameters<InstanceType<T>[Model]['update']>[0]
+  ) => {
+    const result = await this.getClient().update(args);
+    await this.invalidateCache();
+    this.currentTrx = undefined;
+    return result;
+  };
+
+  protected async invalidateCache(): Promise<void> {
+    try {
+      // Invalidate all cached entries for this model
+      const cachePattern = `${this.cacheKeyPrefix}*`;
+      await this.cache.delete(cachePattern);
+    } catch (e) {
+      getConfig().logger?.error(`Cache invalidation failed: ${e}`);
+    }
+  }
 }
+
+// Add more cached methods as needed

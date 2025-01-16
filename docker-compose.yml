@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      - '54321:5432' # Using unusual port 54321
+      - '54321:5432'
     command:
       - 'postgres'
       - '-c'
@@ -16,9 +16,15 @@ services:
       - '-c'
       - 'shared_buffers=128MB'
     tmpfs:
-      - /var/lib/postgresql/data # Using tmpfs for non-persistent storage
+      - /var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge

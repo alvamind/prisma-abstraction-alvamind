@@ -126,7 +126,7 @@ const testLogger = new TestLogger();
 const testCache = new TestCache();
 
 function execDockerCommand(command: string) {
-  return execSync(`docker exec postgres-prisma-abstraction ${command}`, {
+  return execSync(`docker exec -u postgres postgres-prisma-abstraction ${command}`, {
     stdio: 'inherit',
     env: {
       ...process.env,
@@ -150,18 +150,23 @@ async function waitForDatabase() {
 
 async function createTestDatabase() {
   try {
-    execDockerCommand(`dropdb --if-exists ${TEST_DB_NAME}`);
+    // Drop existing database if it exists
+    execDockerCommand(`psql -c "DROP DATABASE IF EXISTS ${TEST_DB_NAME}"`);
+
+    // Create new database
+    execDockerCommand(`psql -c "CREATE DATABASE ${TEST_DB_NAME}"`);
   } catch (e) {
-    // Ignore error if database doesn't exist
+    console.error('Error creating test database:', e);
+    throw e;
   }
-  execDockerCommand(`createdb ${TEST_DB_NAME}`);
 }
 
 async function dropTestDatabase() {
   try {
-    execDockerCommand(`dropdb --if-exists ${TEST_DB_NAME}`);
+    execDockerCommand(`psql -c "DROP DATABASE IF EXISTS ${TEST_DB_NAME}"`);
   } catch (e) {
     console.error('Error dropping test database:', e);
+    throw e;
   }
 }
 
