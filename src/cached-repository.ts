@@ -13,7 +13,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
   private readonly _baseRepo: BaseRepository<T, Model>;
 
   constructor(
-    protected cache: Cache,
+    protected cacheInstance: Cache,
     defaultTTL: number = 3600
   ) {
     this._baseRepo = new BaseRepository<T, Model>();
@@ -32,8 +32,8 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
     return this._baseRepo['prisma'];
   }
 
-  public withTrx(trx: TransactionClient) {
-    this._baseRepo.withTrx(trx);
+  public trx(trx: TransactionClient) {
+    this._baseRepo.trx(trx);
     return this;
   }
 
@@ -88,7 +88,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
   /*======================================================================================= */
 
   // Add withCache method for chaining
-  public withCache(options: CacheOptions) {
+  public cache(options: CacheOptions) {
     this.currentCacheOptions = options;
     return this;
   }
@@ -106,7 +106,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       }
 
       const cacheKey = this.getCacheKey('findUnique', args);
-      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findUnique']>(cacheKey);
+      const cached = await this.cacheInstance.get<ModelOperationTypes<T, Model>['findUnique']>(cacheKey);
 
       if (cached !== null) {
         return cached;
@@ -114,7 +114,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
 
       const result = await this._baseRepo.findUnique(args);
       if (result !== null) {
-        await this.cache.set(cacheKey, result, ttl);
+        await this.cacheInstance.set(cacheKey, result, ttl);
       }
       return result;
     } catch (error) {
@@ -135,7 +135,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       }
 
       const cacheKey = this.getCacheKey('findMany', args);
-      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findMany']>(cacheKey);
+      const cached = await this.cacheInstance.get<ModelOperationTypes<T, Model>['findMany']>(cacheKey);
 
       if (cached !== null) {
         return cached;
@@ -143,7 +143,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
 
       const result = await this._baseRepo.findMany(args);
       if (result.length > 0) {
-        await this.cache.set(cacheKey, result, ttl);
+        await this.cacheInstance.set(cacheKey, result, ttl);
       }
       return result;
     } catch (error) {
@@ -164,7 +164,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       }
 
       const cacheKey = this.getCacheKey('findFirst', args);
-      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findFirst']>(cacheKey);
+      const cached = await this.cacheInstance.get<ModelOperationTypes<T, Model>['findFirst']>(cacheKey);
 
       if (cached !== null) {
         return cached;
@@ -172,7 +172,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
 
       const result = await this._baseRepo.findFirst(args);
       if (result !== null) {
-        await this.cache.set(cacheKey, result, ttl);
+        await this.cacheInstance.set(cacheKey, result, ttl);
       }
       return result;
     } catch (error) {
@@ -193,14 +193,14 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       }
 
       const cacheKey = this.getCacheKey('count', args);
-      const cached = await this.cache.get<ModelOperationTypes<T, Model>['count']>(cacheKey);
+      const cached = await this.cacheInstance.get<ModelOperationTypes<T, Model>['count']>(cacheKey);
 
       if (cached !== null) {
         return cached;
       }
 
       const result = await this._baseRepo.count(args);
-      await this.cache.set(cacheKey, result, ttl);
+      await this.cacheInstance.set(cacheKey, result, ttl);
       return result;
     } catch (error) {
       getConfig().logger?.error(`Cache operation failed: ${error}`);
@@ -258,7 +258,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       }
 
       const cacheKey = this.getCacheKey('$queryRaw', { query, values });
-      const cached = await this.cache.get<P>(cacheKey);
+      const cached = await this.cacheInstance.get<P>(cacheKey);
 
       if (cached !== null) {
         return cached;
@@ -266,7 +266,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
 
       const result = await this._baseRepo.$queryRaw<P>(query, ...values);
       if (result !== null) {
-        await this.cache.set(cacheKey, result, ttl);
+        await this.cacheInstance.set(cacheKey, result, ttl);
       }
       return result;
     } catch (error) {
@@ -283,7 +283,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
   protected async invalidateAfterWrite(_operation: string, _args: any): Promise<void> {
     try {
       const modelPrefix = `${this.model['$name'].toLowerCase()}:`;
-      await this.cache.delete(`${modelPrefix}*`);
+      await this.cacheInstance.delete(`${modelPrefix}*`);
     } catch (error) {
       getConfig().logger?.error(`Cache invalidation failed: ${error}`);
     }
@@ -310,9 +310,9 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
 
   public async flushOperation(operation: string): Promise<void> {
     try {
-      const keys = await this.cache.keys();
+      const keys = await this.cacheInstance.keys();
       const keysToDelete = keys.filter(key => this.matchesOperation(key, operation));
-      await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
+      await Promise.all(keysToDelete.map(key => this.cacheInstance.delete(key)));
     } catch (error) {
       getConfig().logger?.error(`Cache flush failed: ${error}`);
       throw new CacheError('Failed to flush cache', error as Error);
@@ -326,7 +326,7 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
   private async flush(pattern: FlushPattern = 'all'): Promise<void> {
     try {
       if (pattern === 'all') {
-        await this.cache.clear();
+        await this.cacheInstance.clear();
         return;
       }
 
@@ -336,22 +336,22 @@ export class CachedRepository<T extends PrismaClientType, Model extends ModelNam
       if (operation) {
         if (args) {
           const cacheKey = this.getCacheKey(operation, args);
-          await this.cache.delete(cacheKey);
+          await this.cacheInstance.delete(cacheKey);
         } else {
           const operationPrefix = `${modelName}:${operation.toLowerCase()}:`;
-          const keys = await this.cache.keys();
+          const keys = await this.cacheInstance.keys();
           const keysToDelete = keys.filter(key =>
             key.toLowerCase().startsWith(operationPrefix.toLowerCase())
           );
-          await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
+          await Promise.all(keysToDelete.map(key => this.cacheInstance.delete(key)));
         }
       } else {
         const modelPrefix = `${modelName}:`;
-        const keys = await this.cache.keys();
+        const keys = await this.cacheInstance.keys();
         const keysToDelete = keys.filter(key =>
           key.toLowerCase().startsWith(modelPrefix.toLowerCase())
         );
-        await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
+        await Promise.all(keysToDelete.map(key => this.cacheInstance.delete(key)));
       }
     } catch (error) {
       getConfig().logger?.error(`Cache flush failed: ${error}`);

@@ -383,11 +383,11 @@ describe('Prisma Abstraction', () => {
     it('should handle successful transactions', async () => {
       try {
         const [user1, user2] = await new UserRepository().$transaction(async (trx) => {
-          const u1 = await new UserRepository().withTrx(trx).create({
+          const u1 = await new UserRepository().trx(trx).create({
             data: { email: 'test.trx1@example.com', name: 'Trx User 1' }
           });
 
-          const u2 = await new UserRepository().withTrx(trx).create({
+          const u2 = await new UserRepository().trx(trx).create({
             data: { email: 'test.trx2@example.com', name: 'Trx User 2' }
           });
 
@@ -404,7 +404,7 @@ describe('Prisma Abstraction', () => {
     it('should rollback failed transactions', async () => {
       try {
         await new UserRepository().$transaction(async (trx) => {
-          await new UserRepository().withTrx(trx).create({
+          await new UserRepository().trx(trx).create({
             data: { email: 'test.rollback@example.com', name: 'Rollback User' }
           });
 
@@ -985,11 +985,11 @@ describe('Prisma Abstraction', () => {
 
       const updates = Array.from({ length: 5 }).map((_, i) =>
         repo.$transaction(async (trx) => {
-          const current = await repo.withTrx(trx).findUnique({
+          const current = await repo.trx(trx).findUnique({
             where: { id: user.id }
           });
 
-          return repo.withTrx(trx).update({
+          return repo.trx(trx).update({
             where: { id: user.id },
             data: { name: `Updated ${current?.name} ${i}` }
           });
@@ -1216,7 +1216,7 @@ describe('Prisma Abstraction', () => {
       });
 
       // First call with caching disabled
-      await repo.withCache({ cache: false }).findUnique(
+      await repo.cache({ cache: false }).findUnique(
         { where: { id: user.id } }
 
       );
@@ -1224,7 +1224,7 @@ describe('Prisma Abstraction', () => {
 
       // Second call with custom TTL
       await repo
-        .withCache({ cache: true, ttl: 60 })
+        .cache({ cache: true, ttl: 60 })
         .findUnique(
           { where: { id: user.id } }
         );
@@ -1252,7 +1252,7 @@ describe('Prisma Abstraction', () => {
       expect(testCache.misses).toBe(0);
 
       // But should still allow override
-      await repo.withCache({ cache: true }).findUnique(
+      await repo.cache({ cache: true }).findUnique(
         { where: { id: user.id } },
 
       );

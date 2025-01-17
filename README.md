@@ -59,7 +59,7 @@
 
 ## 🎯 What is PrismaStack?
 
-**PrismaStack** is a powerful enhancement framework for Prisma ORM, built for enterprise apps that need speed, stability, and easy code management. It kicks Prisma up a notch with cool features like smart caching, repository patterns, solid transactions, and lots of tests.
+**PrismaStack** is a beast of a framework that beefs up your Prisma ORM, made for enterprise apps that need to be fast, stable, and easy to manage. It throws in goodies like smart caching, repository patterns, solid transactions, and tons of tests.
 
 ### Keywords
 `prisma-orm` `typescript` `database` `orm` `caching` `repository-pattern` `enterprise` `nodejs` `typescript-orm` `database-framework` `prisma-extension` `orm-framework` `typescript-database` `prisma-tools` `database-caching` `prisma-wrapper` `prisma-enhancement` `database-performance` `prisma-utils` `acid-transactions`
@@ -275,9 +275,9 @@ async function main() {
   });
 
   // Cached
-  const user1 = await userRepo.findUnique({ where: { id: newUser.id } });
+  const user1 = await userRepo.cache({ cache: true }).findUnique({ where: { id: newUser.id } });
   // From cache
-  const user2 = await userRepo.findUnique({ where: { id: newUser.id } });
+  const user2 = await userRepo.cache({ cache: true }).findUnique({ where: { id: newUser.id } });
 }
 
 main();
@@ -324,8 +324,8 @@ class UserRepository extends BaseRepository<typeof PrismaClient, 'user'> {
   // Update with history
   async updateUserWithHistory(id: string, data: any) {
     return this.$transaction(async (trx) => {
-      const currentUser = await this.withTrx(trx).findUnique({ where: { id } });
-      const updatedUser = await this.withTrx(trx).update({ where: { id }, data });
+      const currentUser = await this.trx(trx).findUnique({ where: { id } });
+      const updatedUser = await this.trx(trx).update({ where: { id }, data });
       // Log to history model (not shown)
       return updatedUser;
     });
@@ -339,15 +339,13 @@ class UserRepository extends BaseRepository<typeof PrismaClient, 'user'> {
 class CachedUserRepository extends CachedRepository<typeof PrismaClient, 'user'> {
   // Custom cache settings
   async findUsersByStatus(status: string) {
-    return this.findMany({ where: { status } }, { cache: true, ttl: 300 });
+      return this.cache({ cache: true, ttl: 300 }).findMany({ where: { status } });
   }
 
   // Conditional caching
   async findUserWithPosts(userId: string, options: { cache?: boolean } = {}) {
-    return this.findUnique(
-      { where: { id: userId }, include: { posts: true } },
-      { cache: options.cache, ttl: options.cache ? 60 : undefined }
-    );
+    return this.cache({ cache: options.cache, ttl: options.cache ? 60 : undefined })
+               .findUnique({ where: { id: userId }, include: { posts: true } });
   }
 }
 ```
@@ -364,9 +362,9 @@ class UserService {
 
   async createUserWithPosts(userData: any, posts: any[]) {
     return this.userRepo.$transaction(async (trx) => {
-      const user = await this.userRepo.withTrx(trx).create({ data: userData });
+      const user = await this.userRepo.trx(trx).create({ data: userData });
       const createdPosts = await Promise.all(
-        posts.map(post => this.postRepo.withTrx(trx).create({ data: { ...post, authorId: user.id } }))
+        posts.map(post => this.postRepo.trx(trx).create({ data: { ...post, authorId: user.id } }))
       );
       // Send welcome email (outside transaction)
       await this.emailService.sendWelcomeEmail(user.email);
@@ -422,7 +420,7 @@ class CachedUserRepository extends CachedRepository<typeof PrismaClient, 'user'>
 ```typescript
 // Switches between transaction and regular client
 await userRepo.$transaction(async (trx) => {
-  const user = await userRepo.withTrx(trx).findUnique({/*...*/});
+  const user = await userRepo.trx(trx).findUnique({/*...*/});
   // Cleans up transaction reference
 });
 ```
@@ -483,9 +481,8 @@ setConfig({
 #### Granular Cache Control
 ```typescript
 // Per-operation cache control
-const users = await userRepo.findMany(
-  { where: { status: 'active' } },
-  { cache: true, ttl: 300 }
+const users = await userRepo.cache({ cache: true, ttl: 300 }).findMany(
+  { where: { status: 'active' } }
 );
 
 // Global cache configuration

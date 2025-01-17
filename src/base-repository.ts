@@ -74,7 +74,7 @@ export class BaseRepository<
     return modelName as Model;
   }
 
-  withTrx(trx: TransactionClient) {
+  trx(trx: TransactionClient) {
     this.currentTrx = trx;
     return this;
   }

@@ -11,7 +11,7 @@
 //   }
 
 //   async findUserById(id: number) {
-//     const abc = await this.withCache({ cache: true, ttl: 20 }).findUnique({
+//     const abc = await this.trx(trx).findMany({
 //       where: { id: "sadas" }, select: { id: true, email: true }
 //     });
 
