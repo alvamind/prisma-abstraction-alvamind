@@ -1,19 +1,20 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": false,
-    "outDir": "dist",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "removeComments": true,
     "declaration": true,
-    "sourceMap": true,
-    "module": "NodeNext",
-    "target": "ES2019",
-    "moduleResolution": "NodeNext",
-    "allowImportingTsExtensions": false,
-    "esModuleInterop": true,
-    "preserveConstEnums": true,
     "declarationMap": true,
-    "inlineSources": true
+    "sourceMap": true,
+    "inlineSources": true,
+    "importHelpers": true,
+    "noEmitHelpers": true,
+    "composite": true,
+    "incremental": true,
+    "stripInternal": true,
+    "noEmitOnError": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["test", "dist", "node_modules"]
+  "exclude": ["node_modules", "test", "dist", "**/*.spec.ts", "**/*.test.ts", "examples", "docs"],
+  "include": ["src/**/*"]
 }

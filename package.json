@@ -1,6 +1,6 @@
 {
   "name": "prisma-abstraction-alvamind",
-  "version": "1.0.5",
+  "version": "1.0.4",
   "description": "Type-safe repository pattern abstraction for Prisma",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,22 +15,25 @@
     "compose": "docker compose up -d",
     "commit": "commit",
     "reinstall": "bun clean && bun install",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rimraf dist && tsc -p tsconfig.build.json",
     "source": "generate-source --exclude=**/dist/**,.gitignore,bun.lockb,*md --output=source.md",
-    "clean": "clean",
+    "clean": "rimraf dist node_modules",
     "build:tgz": "bun run build && bun pm pack",
     "test": "bun test test/*.test.ts",
     "split-code": "split-code source=combined.md markers=nats-alvamind/ outputDir=./output",
-    "publish-npm": "publish-npm patch",
+    "publish-npm": "npm version patch && npm publish",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "test:with-db": "docker compose up -d && bun test && docker compose down"
+    "test:with-db": "docker compose up -d && bun test && docker compose down",
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "prisma",
     "repository",
     "typescript",
-    "orm"
+    "orm",
+    "database",
+    "cache"
   ],
   "author": "alvamind",
   "license": "MIT",
@@ -42,7 +45,14 @@
   "devDependencies": {
     "@types/bun": "^1.1.16",
     "bun-types": "^1.1.43",
-    "prisma": "^6.2.1"
+    "prisma": "^6.2.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.7.3",
+    "@types/node": "^20.10.5",
+    "prettier": "^3.1.1",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0"
   },
   "files": [
     "dist",
@@ -50,7 +60,29 @@
     "LICENSE"
   ],
   "peerDependencies": {
-    "typescript": "^5.0.0",
-    "@prisma/client": "^6.2.1"
-  }
+    "@prisma/client": "^6.2.1",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "type": "commonjs"
 }

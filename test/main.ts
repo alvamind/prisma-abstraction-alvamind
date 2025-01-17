@@ -1,4 +1,5 @@
-import { UserRepository } from './user-repository';
+import { UserRepository } from "./user-repository";
+
 
 async function main() {
   const userRepo = new UserRepository();
