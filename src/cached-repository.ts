@@ -2,66 +2,284 @@
 import { Sql } from '@prisma/client/runtime/library';
 import { BaseRepository } from './base-repository';
 import { getConfig } from './config';
-import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern, PrismaDelegate, ModelOperationTypes } from './types';
+import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern, PrismaDelegate, ModelOperationTypes, TransactionClient } from './types';
 import { defaultSanitizeKey } from './utils';
 
-export abstract class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
+
+export class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> {
+  private currentCacheOptions?: CacheOptions;
   protected defaultTTL: number;
   protected defaultCaching: boolean;
+  private readonly _baseRepo: BaseRepository<T, Model>;
 
   constructor(
     protected cache: Cache,
-    defaultTTL: number = 3600 // 1 hour default
+    defaultTTL: number = 3600
   ) {
-    super();
+    this._baseRepo = new BaseRepository<T, Model>();
+
     const config = getConfig();
     this.defaultTTL = config.cacheConfig?.defaultTTL ?? defaultTTL;
     this.defaultCaching = config.cacheConfig?.defaultCaching ?? true;
   }
 
-
-  // Override methods to use cache options
-  public override async findUnique(
-    args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0],
-    options?: CacheOptions
-  ): Promise<ModelOperationTypes<T, Model>['findUnique']> {
-    return this.cacheRead('findUnique', args, () => super.findUnique(args), options);
+  // Protected access to base properties
+  protected get model() {
+    return this._baseRepo['model'];
   }
 
-  public override async findMany(
-    args: Parameters<PrismaDelegate<T, Model>['findMany']>[0],
-    options?: CacheOptions
-  ): Promise<ModelOperationTypes<T, Model>['findMany']> {
-    return this.cacheRead('findMany', args, () => super.findMany(args), options);
+  protected get prisma() {
+    return this._baseRepo['prisma'];
   }
 
-  public override async findFirst(
-    args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0],
-    options?: CacheOptions
-  ): Promise<ModelOperationTypes<T, Model>['findFirst']> {
-    return this.cacheRead('findFirst', args, () => super.findFirst(args), options);
+  public withTrx(trx: TransactionClient) {
+    this._baseRepo.withTrx(trx);
+    return this;
   }
 
-  public override async count(
-    args: Parameters<PrismaDelegate<T, Model>['count']>[0],
-    options?: CacheOptions
-  ): Promise<ModelOperationTypes<T, Model>['count']> {
-    return this.cacheRead('count', args, () => super.count(args), options);
+  // Method declarations
+  public isExist = <
+    Where extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { where?: infer W } ? W : never,
+    Select extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { select?: infer S } ? S : never
+  >(
+    where: Where,
+    select?: Select
+  ): Promise<boolean> => {
+    return this._baseRepo.isExist(where, select);
+  };
+
+  public findManyWithPagination = <
+    Args extends Parameters<PrismaDelegate<T, Model>['findMany']>[0] = Parameters<PrismaDelegate<T, Model>['findMany']>[0]
+  >(args: {
+    page?: number;
+    pageSize?: number;
+    where?: Args extends { where?: infer W } ? W : never;
+    orderBy?: Args extends { orderBy?: infer O } ? O : never;
+    select?: Args extends { select?: infer S } ? S : never;
+    include?: Args extends { include?: infer I } ? I : never;
+  }) => {
+    return this._baseRepo.findManyWithPagination(args);
+  };
+
+  public restoreById = <
+    Args extends Parameters<PrismaDelegate<T, Model>['update']>[0] = Parameters<PrismaDelegate<T, Model>['update']>[0]
+  >(
+    id: string,
+    data?: Args extends { data?: infer D } ? Omit<D, 'deletedAt'> : never
+  ): Promise<ModelOperationTypes<T, Model>['update']> => {
+    return this._baseRepo.restoreById(id, data);
+  };
+
+  // @ts-ignore
+  public create: PrismaDelegate<T, Model>['create'] = async (args: any) => {
+    const result = await this._baseRepo.create(args);
+    await this.invalidateAfterWrite('create', args);
+    return result;
+  };
+
+  // @ts-ignore
+  public createMany: PrismaDelegate<T, Model>['createMany'] = async (args: any) => {
+    const result = await this._baseRepo.createMany(args);
+    await this.invalidateAfterWrite('createMany', args);
+    return result;
+  };
+
+
+  /*======================================================================================= */
+
+  // Add withCache method for chaining
+  public withCache(options: CacheOptions) {
+    this.currentCacheOptions = options;
+    return this;
   }
 
-  public override async $queryRaw<P = any>(
-    query: TemplateStringsArray | Sql,
-    ...values: any[]
-  ): Promise<P> {
-    const lastArg = values[values.length - 1];
-    const options = lastArg && typeof lastArg === 'object' && 'cache' in lastArg ?
-      values.pop() as CacheOptions :
-      undefined;
+  // Modify the find methods to use currentCacheOptions
+  // @ts-ignore
+  public findUnique: PrismaDelegate<T, Model>['findUnique'] = async (args: any) => {
+    try {
+      const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
+      const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
+      this.currentCacheOptions = undefined; // Reset after use
 
-    return this.cacheRead('$queryRaw', { query, values }, () => super.$queryRaw(query, ...values), options);
+      if (!shouldCache) {
+        return await this._baseRepo.findUnique(args);
+      }
+
+      const cacheKey = this.getCacheKey('findUnique', args);
+      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findUnique']>(cacheKey);
+
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await this._baseRepo.findUnique(args);
+      if (result !== null) {
+        await this.cache.set(cacheKey, result, ttl);
+      }
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return this._baseRepo.findUnique(args);
+    }
+  };
+
+  // @ts-ignore
+  public findMany: PrismaDelegate<T, Model>['findMany'] = async (args: any) => {
+    try {
+      const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
+      const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
+      this.currentCacheOptions = undefined; // Reset after use
+
+      if (!shouldCache) {
+        return await this._baseRepo.findMany(args);
+      }
+
+      const cacheKey = this.getCacheKey('findMany', args);
+      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findMany']>(cacheKey);
+
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await this._baseRepo.findMany(args);
+      if (result.length > 0) {
+        await this.cache.set(cacheKey, result, ttl);
+      }
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return this._baseRepo.findMany(args);
+    }
+  };
+
+  // @ts-ignore
+  public findFirst: PrismaDelegate<T, Model>['findFirst'] = async (args: any) => {
+    try {
+      const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
+      const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
+      this.currentCacheOptions = undefined; // Reset after use
+
+      if (!shouldCache) {
+        return await this._baseRepo.findFirst(args);
+      }
+
+      const cacheKey = this.getCacheKey('findFirst', args);
+      const cached = await this.cache.get<ModelOperationTypes<T, Model>['findFirst']>(cacheKey);
+
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await this._baseRepo.findFirst(args);
+      if (result !== null) {
+        await this.cache.set(cacheKey, result, ttl);
+      }
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return this._baseRepo.findFirst(args);
+    }
+  };
+
+  // @ts-ignore
+  public count: PrismaDelegate<T, Model>['count'] = async (args: any) => {
+    try {
+      const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
+      const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
+      this.currentCacheOptions = undefined; // Reset after use
+
+      if (!shouldCache) {
+        return await this._baseRepo.count(args);
+      }
+
+      const cacheKey = this.getCacheKey('count', args);
+      const cached = await this.cache.get<ModelOperationTypes<T, Model>['count']>(cacheKey);
+
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await this._baseRepo.count(args);
+      await this.cache.set(cacheKey, result, ttl);
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return this._baseRepo.count(args);
+    }
+  };
+
+  /* ======================================================================================= */
+  // @ts-ignore
+  public delete: PrismaDelegate<T, Model>['delete'] = async (args: any) => {
+    const result = await this._baseRepo.delete(args);
+    await this.invalidateAfterWrite('delete', args);
+    return result;
+  };
+  // @ts-ignore
+  public deleteMany: PrismaDelegate<T, Model>['deleteMany'] = async (args: any) => {
+    const result = await this._baseRepo.deleteMany(args);
+    await this.invalidateAfterWrite('deleteMany', args);
+    return result;
+  };
+  // @ts-ignore
+  public update: PrismaDelegate<T, Model>['update'] = async (args: any) => {
+    const result = await this._baseRepo.update(args);
+    await this.invalidateAfterWrite('update', args);
+    return result;
+  };
+  // @ts-ignore
+  public updateMany: PrismaDelegate<T, Model>['updateMany'] = async (args: any) => {
+    const result = await this._baseRepo.updateMany(args);
+    await this.invalidateAfterWrite('updateMany', args);
+    return result;
+  };
+
+  // @ts-ignore
+  public upsert: PrismaDelegate<T, Model>['upsert'] = async (args: any) => {
+    const result = await this._baseRepo.upsert(args);
+    await this.invalidateAfterWrite('upsert', args);
+    return result;
+  };
+
+  public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
+    const result = await this._baseRepo.$executeRaw(query, ...values);
+    await this.invalidateAfterWrite('$executeRaw', { query, values });
+    return result;
   }
 
-  // Cache invalidation for write operations
+  public async $queryRaw<P = any>(query: TemplateStringsArray | Sql, ...values: any[]): Promise<P> {
+    try {
+      const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
+      const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
+      this.currentCacheOptions = undefined; // Reset after use
+
+      if (!shouldCache) {
+        return await this._baseRepo.$queryRaw<P>(query, ...values);
+      }
+
+      const cacheKey = this.getCacheKey('$queryRaw', { query, values });
+      const cached = await this.cache.get<P>(cacheKey);
+
+      if (cached !== null) {
+        return cached;
+      }
+
+      const result = await this._baseRepo.$queryRaw<P>(query, ...values);
+      if (result !== null) {
+        await this.cache.set(cacheKey, result, ttl);
+      }
+      return result;
+    } catch (error) {
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      return this._baseRepo.$queryRaw<P>(query, ...values);
+    }
+  }
+
+  public async $transaction<P>(fn: (prisma: TransactionClient) => Promise<P>): Promise<P> {
+    return this._baseRepo.$transaction(fn);
+  }
+
+  // Cache management methods
   protected async invalidateAfterWrite(_operation: string, _args: any): Promise<void> {
     try {
       const modelPrefix = `${this.model['$name'].toLowerCase()}:`;
@@ -70,41 +288,6 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
       getConfig().logger?.error(`Cache invalidation failed: ${error}`);
     }
   }
-
-  // In cached-repository.ts
-  protected async cacheRead<P>(
-    operation: string,
-    args: any,
-    callback: () => Promise<P>,
-    options?: CacheOptions
-  ): Promise<P> {
-    const shouldCache = options?.cache ?? this.defaultCaching;
-    const ttl = options?.ttl ?? this.defaultTTL;
-
-    if (!shouldCache) {
-      return callback();
-    }
-
-    const cacheKey = this.getCacheKey(operation, args);
-
-    try {
-      const cached = await this.cache.get<P>(cacheKey);
-      if (cached !== null) {
-        return cached;
-      }
-
-      const result = await callback();
-      // Only cache non-null results
-      if (result !== null) {
-        await this.cache.set(cacheKey, result, ttl);
-      }
-      return result;
-    } catch (error) {
-      getConfig().logger?.error(`Cache operation failed: ${error}`);
-      return callback();
-    }
-  }
-
 
   private getCacheKey(operation: string, args: any): string {
     const modelName = this.model['$name'].toLowerCase();
@@ -120,78 +303,27 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
     return defaultSanitizeKey(key);
   }
 
-
-  // Override example for write operations
-  public override async create(
-    args: Parameters<PrismaDelegate<T, Model>['create']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['create']> {
-    const result = await super.create(args);
-    await this.invalidateAfterWrite('create', args);
-    return result;
+  // Cache flushing methods
+  public async flushAll(): Promise<void> {
+    return this.flush('all');
   }
 
-  public override async createMany(
-    args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['createMany']> {
-    const result = await super.createMany(args);
-    await this.invalidateAfterWrite('createMany', args);
-    return result;
+  public async flushOperation(operation: string): Promise<void> {
+    try {
+      const keys = await this.cache.keys();
+      const keysToDelete = keys.filter(key => this.matchesOperation(key, operation));
+      await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
+    } catch (error) {
+      getConfig().logger?.error(`Cache flush failed: ${error}`);
+      throw new CacheError('Failed to flush cache', error as Error);
+    }
   }
 
-  public override async delete(
-    args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['delete']> {
-    const result = await super.delete(args);
-    await this.invalidateAfterWrite('delete', args);
-    return result;
+  public async flushExact(operation: string, args: Record<string, any>): Promise<void> {
+    return this.flush({ operation, args });
   }
 
-  public override async deleteMany(
-    args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
-    const result = await super.deleteMany(args);
-    await this.invalidateAfterWrite('deleteMany', args);
-    return result;
-  }
-
-  public override async $executeRaw(
-    query: TemplateStringsArray | Sql,
-    ...values: any[]
-  ): Promise<number> {
-    const result = await super.$executeRaw(query, ...values);
-    await this.invalidateAfterWrite('$executeRaw', { query, values });
-    return result;
-  }
-
-  public override async update(
-    args: Parameters<PrismaDelegate<T, Model>['update']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['update']> {
-    const result = await super.update(args);
-    await this.invalidateAfterWrite('update', args);
-    return result;
-  }
-
-  public override async updateMany(
-    args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['updateMany']> {
-    const result = await super.updateMany(args);
-    await this.invalidateAfterWrite('updateMany', args);
-    return result;
-  }
-
-  public override async upsert(
-    args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['upsert']> {
-    const result = await super.upsert(args);
-    await this.invalidateAfterWrite('upsert', args);
-    return result;
-  }
-
-  /**
-   * Flush cache entries based on pattern
-   */
-
-  protected async flush(pattern: FlushPattern = 'all'): Promise<void> {
+  private async flush(pattern: FlushPattern = 'all'): Promise<void> {
     try {
       if (pattern === 'all') {
         await this.cache.clear();
@@ -203,27 +335,22 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
 
       if (operation) {
         if (args) {
-          // Delete specific cache entry
           const cacheKey = this.getCacheKey(operation, args);
           await this.cache.delete(cacheKey);
         } else {
-          // Delete all entries for specific operation
           const operationPrefix = `${modelName}:${operation.toLowerCase()}:`;
           const keys = await this.cache.keys();
           const keysToDelete = keys.filter(key =>
             key.toLowerCase().startsWith(operationPrefix.toLowerCase())
           );
-
           await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
         }
       } else {
-        // Delete all entries for this model
         const modelPrefix = `${modelName}:`;
         const keys = await this.cache.keys();
         const keysToDelete = keys.filter(key =>
           key.toLowerCase().startsWith(modelPrefix.toLowerCase())
         );
-
         await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
       }
     } catch (error) {
@@ -232,28 +359,12 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
     }
   }
 
-
-
-
-  /**
-   * Flush all cache entries for current model
-   */
-  public async flushAll(): Promise<void> {
-    return this.flush('all');
-  }
-
-  /**
-   * Flush cache entries for specific operation
-   */
-
   private decodeKey(key: string): string {
     const config = getConfig();
     if (config.cacheConfig?.cacheKeySanitizer) {
-      // If there's a custom sanitizer, we should store the original keys mapping
       return key;
     }
 
-    // For default sanitizer (base64url), try to decode
     try {
       return Buffer.from(key, 'base64url').toString();
     } catch {
@@ -264,27 +375,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   private matchesOperation(key: string, operation: string): boolean {
     const modelName = this.model['$name'].toLowerCase();
     const operationPattern = `${modelName}:${operation.toLowerCase()}:`;
-
     const decodedKey = this.decodeKey(key).toLowerCase();
     return decodedKey.includes(operationPattern);
-  }
-
-  public async flushOperation(operation: string): Promise<void> {
-    try {
-      const keys = await this.cache.keys();
-      const keysToDelete = keys.filter(key => this.matchesOperation(key, operation));
-
-      await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
-    } catch (error) {
-      getConfig().logger?.error(`Cache flush failed: ${error}`);
-      throw new CacheError('Failed to flush cache', error as Error);
-    }
-  }
-
-  /**
-   * Flush cache entry for specific operation and arguments
-   */
-  public async flushExact(operation: string, args: Record<string, any>): Promise<void> {
-    return this.flush({ operation, args });
   }
 }

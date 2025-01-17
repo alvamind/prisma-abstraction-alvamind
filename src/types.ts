@@ -1,7 +1,15 @@
 // src/types.ts
 import { PrismaClient } from '@prisma/client';
+import { CachedRepository } from './cached-repository';
+import { BaseRepository } from './base-repository';
 
 export type PrismaClientType = typeof PrismaClient;
+
+export type ExtractModelName<T> = T extends CachedRepository<any, infer M>
+  ? M
+  : T extends BaseRepository<any, infer M>
+  ? M
+  : never;
 
 // Updated ModelNames type
 export type ModelNames<T extends PrismaClientType> = keyof Omit<

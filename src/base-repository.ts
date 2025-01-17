@@ -4,7 +4,7 @@ import { ModelNames, PrismaClientType, TransactionClient, PrismaDelegate, ModelO
 import { getConfig, getPrismaClient } from './config';
 import { Sql } from '@prisma/client/runtime/library';
 
-export abstract class BaseRepository<
+export class BaseRepository<
   T extends PrismaClientType = typeof PrismaClient,
   Model extends ModelNames<T> = ModelNames<T>
 > {
@@ -14,26 +14,57 @@ export abstract class BaseRepository<
 
   constructor() {
     try {
-      const modelName = this.getModelName();
-      this.prisma = getPrismaClient();
+      // Get the constructor's name and full definition
+      const constructorStr = Object.getPrototypeOf(this).constructor.toString();
 
-      // Type cast modelName to be a valid key of PrismaClient
-      const modelKey = modelName as keyof typeof this.prisma;
+      // Two regex patterns: one for direct inheritance and one for cached
+      const directRegex = /extends\s+BaseRepository\s*<[^,]*,\s*['"]([\w.]+)['"]\s*>/;
+      const cachedRegex = /Repository\s*<[^,]*,\s*['"]([\w.]+)['"]\s*>/;
 
-      if (!(modelKey in this.prisma) || typeof this.prisma[modelKey] !== 'object') {
-        throw new Error(`Invalid model name: ${String(modelName)}`);
+      let match = constructorStr.match(directRegex) || constructorStr.match(cachedRegex);
+
+      if (!match?.[1]) {
+        // Fallback to class name if no generic parameters found
+        const className = this.constructor.name
+          .replace(/Repository$/, '')
+          .replace(/^Cached/, '')
+          .toLowerCase();
+
+        if (className) {
+          match = [null, className];
+        } else {
+          throw new Error(
+            'prisma-abstraction-alvamind: Could not determine model name. ' +
+            'Make sure your repository class properly extends BaseRepository with generic parameters. ' +
+            'Example: class UserRepository extends BaseRepository<PrismaClient, \'user\'>'
+          );
+        }
       }
 
-      // Use the validated modelKey for type-safe access
+      const modelName = match[1].toLowerCase();
+      this.prisma = getPrismaClient();
+
+      // Validate that the model exists in Prisma client
+      const modelKey = modelName as keyof typeof this.prisma;
+      if (!(modelKey in this.prisma) || typeof this.prisma[modelKey] !== 'object') {
+        throw new Error(
+          `prisma-abstraction-alvamind: Invalid model name "${modelName}". ` +
+          'Make sure the model name matches your Prisma schema.'
+        );
+      }
+
       this.model = this.prisma[modelKey] as unknown as PrismaDelegate<T, Model>;
-      getConfig().logger?.info(`prisma-abstraction-alvamind: ${String(modelName)} Repository initialized`);
-    } catch (e) {
-      getConfig().logger?.error(`prisma-abstraction-alvamind: Repository initialization failed: ${e}`);
-      throw e;
+      getConfig().logger?.info(`prisma-abstraction-alvamind: ${modelName} Repository initialized`);
+
+    } catch (error) {
+      getConfig().logger?.error(
+        `prisma-abstraction-alvamind: Repository initialization failed: ${error}`
+      );
+      throw error;
     }
   }
 
-  private getModelName(): Model {
+  protected getModelName(): Model {
     const className = this.constructor.name;
     // Remove 'Repository' and 'Cached' from the name
     const modelName = className
@@ -57,81 +88,74 @@ export abstract class BaseRepository<
     return client;
   }
 
-  public async create(
-    args: Parameters<PrismaDelegate<T, Model>['create']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['create']> {
+  // @ts-ignore
+  public create: PrismaDelegate<T, Model>['create'] = async (args: any) => {
     try {
-      return await this.getClient()['create'](args);
+      return await this.getClient().create(args);
+    } finally {
+      this.currentTrx = undefined;
+    }
+  };
+
+  // @ts-ignore
+  public createMany: PrismaDelegate<T, Model>['createMany'] = async (args: any) => {
+    try {
+      return await this.getClient().createMany(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
-  public async createMany(
-    args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['createMany']> {
+  // @ts-ignore
+  public findMany: PrismaDelegate<T, Model>['findMany'] = async (args: any) => {
     try {
-      return await this.getClient()['createMany'](args);
+      return await this.getClient().findMany(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async findMany(
-    args: Parameters<PrismaDelegate<T, Model>['findMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['findMany']> {
+  // @ts-ignore
+  public findFirst: PrismaDelegate<T, Model>['findFirst'] = async (args: any) => {
     try {
-      return await this.getClient()['findMany'](args);
+      return await this.getClient().findFirst(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async findFirst(
-    args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['findFirst']> {
+  // @ts-ignore
+  public findUnique: PrismaDelegate<T, Model>['findUnique'] = async (args: any) => {
     try {
-      return await this.getClient()['findFirst'](args);
+      return await this.getClient().findUnique(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async findUnique(
-    args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['findUnique']> {
-    try {
-      return await this.getClient()['findUnique'](args);
-    } finally {
-      this.currentTrx = undefined;
-    }
-  }
-
-  public async delete(
-    args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['delete']> {
+  // @ts-ignore
+  public delete: PrismaDelegate<T, Model>['delete'] = async (args: any) => {
     try {
       if (getConfig().softDelete) {
         return await this.softDelete(args);
       }
-      return await this.getClient()['delete'](args);
+      return await this.getClient().delete(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async deleteMany(
-    args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
+  // @ts-ignore
+  public deleteMany: PrismaDelegate<T, Model>['deleteMany'] = async (args: any) => {
     try {
       if (getConfig().softDelete) {
         return await this.softDeleteMany(args);
       }
-      return await this.getClient()['deleteMany'](args);
+      return await this.getClient().deleteMany(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
   // Use ModelOperationTypes here
   protected async softDelete(args: any): Promise<ModelOperationTypes<T, Model>['delete']> {
@@ -161,45 +185,41 @@ export abstract class BaseRepository<
     return result as any;
   };
 
-  public async update(
-    args: Parameters<PrismaDelegate<T, Model>['update']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['update']> {
+  // @ts-ignore
+  public update: PrismaDelegate<T, Model>['update'] = async (args: any) => {
     try {
-      return await this.getClient()['update'](args);
+      return await this.getClient().update(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async updateMany(
-    args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['updateMany']> {
+  // @ts-ignore
+  public updateMany: PrismaDelegate<T, Model>['updateMany'] = async (args: any) => {
     try {
-      return await this.getClient()['updateMany'](args);
+      return await this.getClient().updateMany(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async upsert(
-    args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['upsert']> {
+  // @ts-ignore
+  public upsert: PrismaDelegate<T, Model>['upsert'] = async (args: any) => {
     try {
-      return await this.getClient()['upsert'](args);
+      return await this.getClient().upsert(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
-  public async count(
-    args: Parameters<PrismaDelegate<T, Model>['count']>[0]
-  ): Promise<ModelOperationTypes<T, Model>['count']> {
+  // @ts-ignore
+  public count: PrismaDelegate<T, Model>['count'] = async (args: any) => {
     try {
-      return await this.getClient()['count'](args);
+      return await this.getClient().count(args);
     } finally {
       this.currentTrx = undefined;
     }
-  }
+  };
 
   public async $executeRaw(
     query: TemplateStringsArray | Sql,
@@ -326,4 +346,5 @@ export abstract class BaseRepository<
     this.currentTrx = undefined;
     return result;
   }
+
 }

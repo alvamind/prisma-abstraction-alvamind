@@ -1216,17 +1216,19 @@ describe('Prisma Abstraction', () => {
       });
 
       // First call with caching disabled
-      await repo.findUnique(
-        { where: { id: user.id } },
-        { cache: false }
+      await repo.withCache({ cache: false }).findUnique(
+        { where: { id: user.id } }
+
       );
       expect(testCache.misses).toBe(0); // Should not even attempt to use cache
 
       // Second call with custom TTL
-      await repo.findUnique(
-        { where: { id: user.id } },
-        { cache: true, ttl: 60 }
-      );
+      await repo
+        .withCache({ cache: true, ttl: 60 })
+        .findUnique(
+          { where: { id: user.id } }
+        );
+
       expect(testCache.misses).toBe(1); // Should miss and then cache
 
       // Third call should hit cache
@@ -1250,9 +1252,9 @@ describe('Prisma Abstraction', () => {
       expect(testCache.misses).toBe(0);
 
       // But should still allow override
-      await repo.findUnique(
+      await repo.withCache({ cache: true }).findUnique(
         { where: { id: user.id } },
-        { cache: true }
+
       );
       expect(testCache.misses).toBe(1);
     });
