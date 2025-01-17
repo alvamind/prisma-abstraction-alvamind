@@ -1,6 +1,6 @@
 {
   "name": "prisma-abstraction-alvamind",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Type-safe repository pattern abstraction for Prisma",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
