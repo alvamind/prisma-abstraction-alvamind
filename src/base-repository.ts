@@ -17,14 +17,18 @@ export abstract class BaseRepository<
       const modelName = this.getModelName();
       this.prisma = getPrismaClient();
 
-      if (!(modelName in this.prisma) || typeof this.prisma[modelName] !== 'object') {
+      // Type cast modelName to be a valid key of PrismaClient
+      const modelKey = modelName as keyof typeof this.prisma;
+
+      if (!(modelKey in this.prisma) || typeof this.prisma[modelKey] !== 'object') {
         throw new Error(`Invalid model name: ${String(modelName)}`);
       }
 
-      this.model = this.prisma[modelName as keyof typeof this.prisma] as PrismaDelegate<T, Model>;
-      getConfig().logger?.info(`${String(modelName)} Repository initialized`);
+      // Use the validated modelKey for type-safe access
+      this.model = this.prisma[modelKey] as unknown as PrismaDelegate<T, Model>;
+      getConfig().logger?.info(`prisma-abstraction-alvamind: ${String(modelName)} Repository initialized`);
     } catch (e) {
-      getConfig().logger?.error(`prisma-abstraction-alvamind:: Repository initialization failed: ${e}`);
+      getConfig().logger?.error(`prisma-abstraction-alvamind: Repository initialization failed: ${e}`);
       throw e;
     }
   }
