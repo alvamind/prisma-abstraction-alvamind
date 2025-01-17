@@ -1,4 +1,53 @@
-# 🚀 Prisma-Abstraction Lib | PrismaStack | Enterprise-Grade Prisma ORM Enhancement Framework
+# 🚀 Prisma-Abstraction Lib | PrismaStack
+
+## 📚 Table of Contents
+  * [🎯 What is PrismaStack?](#-what-is-prismastack)
+    * [Keywords](#keywords)
+  * [💫 Why PrismaStack?](#-why-prismastack)
+  * [🎉 Perfect For:](#-perfect-for)
+  * [🌟 Features: At a Glance](#-features-at-a-glance)
+  * [🔥 Benefits:](#-benefits)
+  * [📚 Use Cases:](#-use-cases)
+  * [👨‍💻 Usage Examples:](#-usage-examples)
+    * [Installation](#installation)
+    * [Setting Up](#setting-up)
+    * [Basic CRUD](#basic-crud)
+    * [Caching Example](#caching-example)
+    * [Soft Delete Example](#soft-delete-example)
+  *  [🎯 Advanced Examples:](#-advanced-examples)
+     * [Custom Repository Methods](#custom-repository-methods)
+     * [Advanced Caching](#advanced-caching)
+     * [Complex Transactions](#complex-transactions)
+     * [Soft Delete with Custom Logic](#soft-delete-with-custom-logic)
+   * [🎯 Advanced Features Deep Dive](#-advanced-features-deep-dive)
+    * [📦 Repository Pattern Enhancements](#-repository-pattern-enhancements)
+    * [🔄 Advanced Query Operations](#-advanced-query-operations)
+    * [🎭 Advanced Caching Features](#-advanced-caching-features)
+    * [⚡ Performance Optimizations](#-performance-optimizations)
+    * [🛡️ Error Handling & Logging](#️-error-handling--logging)
+    * [🔒 Soft Delete Enhancements](#-soft-delete-enhancements)
+    * [🎨 Flexible Configuration](#-flexible-configuration)
+   * [🔧 Configuration Deep Dive](#-configuration-deep-dive)
+    * [Complete Configuration Options](#complete-configuration-options)
+    * [Custom Cache Implementation (Redis Example)](#custom-cache-implementation-redis-example)
+   * [🛡️ Battle-Tested Reliability](#️-battle-tested-reliability)
+    * [🎯 Core Functionality Coverage](#-core-functionality-coverage)
+    * [⚡ Cache System Tests](#-cache-system-tests)
+    * [🏋️ Performance & Reliability](#️-performance--reliability)
+    * [🔬 Edge Cases & Error Handling](#-edge-cases--error-handling)
+    * [📊 Test Statistics](#-test-statistics)
+    * [🎯 Key Test Scenarios](#-key-test-scenarios)
+    * [💪 Reliability Metrics](#-reliability-metrics)
+    * [🔍 Test Environment](#-test-environment)
+  * [🛣️ Roadmap](#-roadmap)
+  * [🙌 Contribution](#-contribution)
+  * [🙏 Donation](#-donation)
+  * [📚 Documentation](#-documentation)
+  * [🤝 Community & Support](#-community--support)
+  * [📖 Citation](#-citation)
+  * [📜 Disclaimer](#-disclaimer)
+  * [🎉 That's All, Folks!](#-thats-all-folks)
+
 
 [![Test](https://github.com/alvamind/prisma-abstraction-alvamind/actions/workflows/test.yml/badge.svg)](https://github.com/alvamind/prisma-abstraction-alvamind/actions/workflows/test.yml)
 [![Publish](https://github.com/alvamind/prisma-abstraction-alvamind/actions/workflows/publish.yml/badge.svg)](https://github.com/alvamind/prisma-abstraction-alvamind/actions/workflows/publish.yml)
@@ -10,69 +59,69 @@
 
 ## 🎯 What is PrismaStack?
 
-**PrismaStack** is a powerful enhancement framework for Prisma ORM, designed for enterprise applications that demand high performance, reliability, and maintainability. It extends Prisma's capabilities with advanced features like intelligent caching, repository patterns, sophisticated transaction management, and comprehensive testing coverage.
+**PrismaStack** is a powerful enhancement framework for Prisma ORM, built for enterprise apps that need speed, stability, and easy code management. It kicks Prisma up a notch with cool features like smart caching, repository patterns, solid transactions, and lots of tests.
 
 ### Keywords
 `prisma-orm` `typescript` `database` `orm` `caching` `repository-pattern` `enterprise` `nodejs` `typescript-orm` `database-framework` `prisma-extension` `orm-framework` `typescript-database` `prisma-tools` `database-caching` `prisma-wrapper` `prisma-enhancement` `database-performance` `prisma-utils` `acid-transactions`
 
 ## 💫 Why PrismaStack?
 
-- **Enterprise-Ready**: Built for large-scale, high-traffic applications.
-- **Type-Safe**: 100% TypeScript support with advanced type inference.
-- **Performance-Focused**: Intelligent caching, query optimization, and efficient bulk operations.
-- **Battle-Tested**: Comprehensive test suite covering real-world scenarios and edge cases.
-- **Developer-Friendly**: Intuitive API with excellent documentation and easy setup.
-- **Production-Proven**: Used in high-traffic applications with proven reliability.
-- **Extensible**: Easily add custom functionality with a flexible architecture.
-- **Secure**: Built with security best practices in mind.
+- **Enterprise-Ready**: Built for big-time, heavy-traffic apps.
+- **Type-Safe**: 100% TypeScript, so no weird type errors.
+- **Performance-Focused**: Caching, query boosts, and fast batch ops.
+- **Battle-Tested**: Rigorous tests for real-world problems.
+- **Developer-Friendly**: Easy to use API with great docs.
+- **Production-Proven**: Works like a charm in high-traffic spots.
+- **Extensible**: Add your own stuff easily.
+- **Secure**: Built with security in mind.
 
 ## 🎉 Perfect For:
 
-- Enterprise Applications
+- Enterprise Apps
 - High-Traffic Systems
-- Microservices Architecture
-- RESTful APIs
+- Microservices
+- REST APIs
 - GraphQL APIs
-- E-commerce Platforms
-- Real-time Applications
+- E-commerce
+- Real-time Apps
 - SaaS Products
-- Complex Data Models
+- Complex Data
 
 ## 🌟 Features: At a Glance
 
-- **😎 Type-Safe Repositories**: Enhanced type safety and developer experience.
-- **⚡ Blazing Fast Caching**: Multi-level, intelligent caching with granular control.
-- **🗑️ Soft Delete**: Built-in soft delete with easy restoration.
-- **💱 Transaction Management**: Simplified, robust transaction handling.
-- **⚙️ Highly Customizable**: Configure to fit your specific needs.
-- **🔍 Raw SQL Support**: Full power of SQL when needed.
-- **📦 Bulk Operations**: Efficient create, update, and delete many.
-- **📄 Pagination**: Easy-to-use pagination with metadata.
-- **✅ Existence Checks**: Optimized for performance.
-- **🤝 Concurrency Handling**: Built for parallel operations.
-- **🔄 Runtime Config Changes**: Update settings on the fly.
-- **🧪 Thoroughly Tested**: Enterprise-grade reliability.
+- **😎 Type-Safe Repos**: No more type guessing.
+- **⚡ Blazing Fast Cache**: Smart caching for speed.
+- **🗑️ Soft Delete**: Easy peasy soft delete and restore.
+- **💱 Transactions**: Simple, strong transaction control.
+- **⚙️ Custom**: Tweak it to your liking.
+- **🔍 Raw SQL**: Full SQL power when you need it.
+- **📦 Bulk Ops**: Quick create, update, delete many.
+- **📄 Pagination**: Smooth pagination with metadata.
+- **✅ Existence Checks**: Fast checks for data.
+- **🤝 Concurrency**: Handles parallel stuff like a pro.
+- **🔄 Runtime Config**: Change settings on the fly.
+- **🧪 Tested**: Enterprise-grade reliability.
 
 ## 🔥 Benefits:
 
-- **🚀 Faster Development**: Less boilerplate, more focus on features.
-- **💪 More Maintainable Code**: Clean, organized, and easy to understand.
-- **📈 Improved Performance**: Faster queries and reduced database load.
-- **🛡️ Fewer Bugs**: Type safety and transactions prevent common errors.
-- **🧠 Easier to Learn**: Simple, intuitive API.
-- **✨ Less Code**: Achieve more with less code.
-- **🛡️ Enhanced Security**: Built-in protection against common issues.
-- **🔄 Better Scalability**: Designed for growth and high traffic.
+- **🚀 Faster Dev**: Less setup, more features.
+- **💪 Maintainable Code**: Clean and easy to read.
+- **📈 Better Perf**: Faster queries, less load.
+- **🛡️ Fewer Bugs**: Type safety and transactions fix common issues.
+- **🧠 Easier to Learn**: Simple, smooth API.
+- **✨ Less Code**: Do more with less code.
+- **🛡️ More Secure**: Built-in protection.
+- **🔄 Scalability**: Designed for big growth.
 
 ## 📚 Use Cases:
 
-- **🌐 REST APIs**: Build robust, scalable APIs.
-- **GraphQL Resolvers**: Clean and efficient resolvers.
-- **Microservices**: Manage data access consistently.
-- **SaaS Applications**: Handle multi-tenancy and data isolation.
-- **E-commerce**: Manage products, orders, and customers efficiently.
-- **Real-time Systems**: Handle high-frequency data updates.
-- **🤔 Anywhere You Use Prisma**: Seriously, it's that versatile.
+- **🌐 REST APIs**: Build solid APIs.
+- **GraphQL Resolvers**: Clean, efficient resolvers.
+- **Microservices**: Manage data smoothly.
+- **SaaS Apps**: Handle multi-tenancy, data isolation.
+- **E-commerce**: Products, orders, customers, all good.
+- **Real-time Systems**: High-frequency updates handled well.
+- **🤔 Prisma?**: Basically everywhere you use Prisma.
 
 ## 👨‍💻 Usage Examples:
 
@@ -594,7 +643,7 @@ const userRepo = new CachedUserRepository(cache);
 
 ## 🛡️ Battle-Tested Reliability
 
-We take testing seriously. Our comprehensive test suite covers everything from basic CRUD to complex edge cases. Here's what we test:
+We're serious about tests. We've got a ton of 'em, from basic stuff to weird edge cases. Here's the breakdown:
 
 ### 🎯 Core Functionality Coverage
 ```
@@ -659,11 +708,11 @@ Average Test Speed: ~93ms
 
 ### 💪 Reliability Metrics
 
-- **Concurrency:** Successfully handled 100 parallel operations
-- **Cache Hit Rate:** >99% for repeated queries
-- **Transaction Safety:** 100% rollback on failure
-- **Data Integrity:** Zero corruption cases
-- **Error Recovery:** 100% graceful handling
+- **Concurrency:** 100 parallel ops, no sweat.
+- **Cache Hit Rate:** 99%+ for repeated queries.
+- **Transaction Safety:** 100% rollback on failures.
+- **Data Integrity:** Zero corruption.
+- **Error Recovery:** 100% graceful handling.
 
 ### 🔍 Test Environment
 
@@ -673,92 +722,26 @@ Average Test Speed: ~93ms
 - **Test Framework:** Bun Test
 - **Coverage Tool:** Built-in
 
-This test suite runs on every commit through our CI/CD pipeline, ensuring consistent reliability and performance.
+These tests run on every commit, making sure everything stays solid.
 
-Want to run the tests yourself? It's as simple as:
+Wanna run the tests yourself? Easy:
 
 ```bash
 bun test
 ```
 
-## 🔍 Optimized Features
+## 🛣️ Roadmap
 
-### Database Operations
-- Advanced Prisma ORM Integration
-- Type-Safe Database Queries
-- Automated Query Optimization
-- Complex Transaction Management
-- Bulk Operation Support
-- Raw Query Capabilities
-
-### Caching System
-- Intelligent Cache Management
-- Redis Integration Support
-- Cache Invalidation Strategies
-- Pattern-Based Cache Flushing
-- Custom Cache Providers
-
-### Repository Pattern
-- Type-Safe Repositories
-- Custom Query Methods
-- Relationship Management
-- Soft Delete Support
-- Audit Trail Capabilities
-
-### Performance Features
-- Query Performance Optimization
-- Bulk Operation Handling
-- Connection Pooling
-- Memory Management
-- Execution Planning
-
-### Security Features
-- Type-Safe Operations
-- Transaction Safety
-- Data Validation
-- Error Handling
-- Audit Logging
-
-## 📈 Performance Metrics
-
-- Query Response Time: < 5ms
-- Cache Hit Rate: > 99%
-- Transaction Success Rate: 99.99%
-- Concurrency Support: 1000+ parallel operations
-- Memory Footprint: Optimized for efficiency
-
-## 🏢 Enterprise Support
-
-- Production-Ready
-- Performance Monitoring
-- Error Tracking
-- Custom Implementation
-- Technical Support
-
-## 🔗 Related Technologies
-
-- Prisma ORM
-- TypeScript
-- Node.js
-- PostgreSQL
-- MySQL
-- SQLite
-- MongoDB
-- Redis
-- Docker
-
-## 🛣️ Roadmap:
-
-Here's a detailed look at what's coming next for PrismaStack:
+Here's the plan for PrismaStack:
 
 **High Priority (Next Up):**
 
-- **[x] More Granular Cache Control:** Model-level cache configuration, allowing specific caching strategies for different parts of your application.
-- **[x] Advanced Querying:** Expanding Prisma query options to support even more complex data retrieval scenarios.
+- **[x] More Granular Cache Control:** Control caching at the model level.
+- **[x] Advanced Querying:** More complex data retrieval options.
 
 **Medium Priority (Coming Soon):**
 
--   **[ ] Real-time Subscriptions:** Implement real-time updates support for your data, enabling a reactive and dynamic user experience.
+- **[ ] Real-time Subscriptions:** Real-time data updates.
     ```typescript
     // Add real-time updates support
     interface SubscriptionOptions {
@@ -772,8 +755,8 @@ Here's a detailed look at what's coming next for PrismaStack:
       options?: SubscriptionOptions
     ): Unsubscribe
     ```
--   **[ ] Batch Operations with Progress:** Add batch processing with progress tracking and chunking, making large data operations more manageable and user-friendly.
-   ```typescript
+- **[ ] Batch Operations with Progress:** Batch processing with progress tracking.
+    ```typescript
     // Add batch processing with progress tracking and chunking
     public async batchProcess<T>(
       items: T[],
@@ -784,8 +767,8 @@ Here's a detailed look at what's coming next for PrismaStack:
         parallel?: boolean;
       }
     )
-   ```
-- **[ ] Smart Cache Prefetching:** Predictive cache loading based on access patterns to further boost performance by anticipating user needs.
+    ```
+- **[ ] Smart Cache Prefetching:** Cache loading based on user patterns.
     ```typescript
     // Predictive cache loading based on access patterns
     public async prefetch(
@@ -797,8 +780,8 @@ Here's a detailed look at what's coming next for PrismaStack:
       options?: { background?: boolean }
     )
     ```
-- **[ ] Built-in Auditing:** Automatically track all data changes with detailed metadata, improving transparency and security.
-   ```typescript
+- **[ ] Built-in Auditing:** Track all data changes with metadata.
+    ```typescript
     // Track all changes with detailed metadata
     interface AuditOptions {
       user?: string;
@@ -811,9 +794,9 @@ Here's a detailed look at what's coming next for PrismaStack:
       operation: () => Promise<T>,
       auditOptions: AuditOptions
     ): Promise<T>
-   ```
+    ```
 
--   **[ ] Advanced Search Features:** Enhanced search capabilities including fuzzy search, weights, highlights, language-specific support, and synonyms to provide more flexible and relevant results.
+- **[ ] Advanced Search Features:** Fuzzy search, weights, highlights, language support, and synonyms.
     ```typescript
     // Enhanced search capabilities
     interface SearchOptions {
@@ -833,7 +816,7 @@ Here's a detailed look at what's coming next for PrismaStack:
 
 **Lower Priority (Future Enhancements):**
 
-- **[ ] Data Encryption Layer:** Field-level encryption support for sensitive data, enhancing the security of your application.
+- **[ ] Data Encryption Layer:** Field-level encryption for sensitive data.
     ```typescript
     // Field-level encryption support
     interface EncryptionOptions {
@@ -845,8 +828,8 @@ Here's a detailed look at what's coming next for PrismaStack:
     public enableEncryption(options: EncryptionOptions): this
     public async reEncryptField(field: string): Promise<void>
     ```
-- **[ ] Smart Data Migration:** Intelligent data migration utilities with validation, rollback, and dry run options, making data updates safer and easier.
-   ```typescript
+- **[ ] Smart Data Migration:** Easy data migration with validation and rollback.
+    ```typescript
     // Intelligent data migration utilities
     interface MigrationOptions {
       batchSize?: number;
@@ -860,20 +843,20 @@ Here's a detailed look at what's coming next for PrismaStack:
       options?: MigrationOptions
     ): Promise<MigrationResult>
     ```
--   **[ ] Versioning Support:**  Add versioning capabilities to entities, including change tracking, and the ability to revert to previous states.
+- **[ ] Versioning Support:** Track and revert to previous states of your data.
     ```typescript
-      // Add versioning capabilities to entities
-      interface VersioningOptions {
-        keepVersions?: number;
-        compareFields?: string[];
-        metadata?: Record<string, any>;
-      }
+    // Add versioning capabilities to entities
+    interface VersioningOptions {
+      keepVersions?: number;
+      compareFields?: string[];
+      metadata?: Record<string, any>;
+    }
 
-      public async createVersion(id: string, options?: VersioningOptions)
-      public async revertToVersion(id: string, version: number)
+    public async createVersion(id: string, options?: VersioningOptions)
+    public async revertToVersion(id: string, version: number)
     ```
--   **[ ] Performance Analytics:** Implement built-in performance monitoring to give you insights on query stats, cache efficiency, and slow queries, as well as recommend optimizations.
-   ```typescript
+- **[ ] Performance Analytics:** Get insights on query performance and cache efficiency.
+    ```typescript
     // Built-in performance monitoring
     interface PerformanceMetrics {
       queryStats: QueryStatistics[];
@@ -886,47 +869,177 @@ Here's a detailed look at what's coming next for PrismaStack:
     public enableQueryProfiling(options?: ProfilingOptions): this
     ```
 
-- **[ ] Automatic Relationship Management:** Simplify the handling of complex entity relationships for a more intuitive development process.
-- **[ ] More Cache Adapters:** Official support for a variety of caching solutions.
-- **[ ] Improved Documentation:** More comprehensive examples and tutorials to get you started quickly.
+- **[ ] Automatic Relationship Management:** Handle relationships easier.
+- **[ ] More Cache Adapters:** Support for more cache solutions.
+- **[ ] Improved Docs:** More examples and tutorials.
 
+**Additional Advanced Features:**
 
-## 🙌 Contribution:
+- **[ ] Read Replicas:** Distribute reads across multiple replicas.
+    ```typescript
+    // Read replica configuration
+    interface DatabaseConfig {
+      primary: PrismaClient;
+      replicas?: PrismaClient[];
+    }
 
-We welcome contributions! Here's how you can help:
+    class EnhancedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
+      private replicas: PrismaClient[];
 
-1. **Fork** the repo.
-2. **Clone** your fork: `git clone https://github.com/alvamind/prisma-abstraction-alvamind.git`
-3. **Create a branch**: `git checkout -b my-feature`
-4. **Make changes**: Code, test, repeat.
-5. **Commit**: `git commit -m "Add my feature"`
-6. **Push**: `git push origin my-feature`
-7. **Open a Pull Request**.
+      constructor(config: DatabaseConfig) {
+        super();
+        this.replicas = config.replicas || [];
+      }
+
+      private getReadReplica(): PrismaClient {
+        if (this.replicas.length === 0) {
+          return this.prisma;
+        }
+        const replicaIndex = Math.floor(Math.random() * this.replicas.length);
+        return this.replicas[replicaIndex];
+      }
+    }
+    ```
+
+- **[ ] Database Sharding:** Partition data for better scalability.
+    ```typescript
+    // Sharding configuration
+    interface ShardConfig {
+      strategy: 'range' | 'hash' | 'directory';
+      shards: Map<string, PrismaClient>;
+      shardKey: string;
+    }
+
+    class ShardManager {
+      constructor(private config: ShardConfig) {}
+
+      getShardForQuery(args: any): PrismaClient {
+        // Implement sharding logic here
+      }
+    }
+    ```
+
+- **[ ] Circuit Breaker Pattern:** Prevent cascade failures with auto recovery.
+    ```typescript
+    // Circuit breaker configuration
+    interface CircuitBreakerConfig {
+      failureThreshold: number;
+      resetTimeout: number;
+    }
+
+    class CircuitBreaker {
+      constructor(private config: CircuitBreakerConfig) {}
+
+      isAllowed(): boolean {
+        // Implement circuit breaker logic here
+      }
+
+      recordFailure(): void {
+        // Implement failure recording logic here
+      }
+    }
+    ```
+
+- **[ ] Rate Limiting:** Control the rate of requests to the database.
+    ```typescript
+    // Rate limiting configuration
+    interface RateLimiterConfig {
+      maxRequests: number;
+      windowMs: number;
+    }
+
+    class RateLimiter {
+      constructor(private config: RateLimiterConfig) {}
+
+      isAllowed(): boolean {
+        // Implement rate limiting logic here
+      }
+    }
+    ```
+
+- **[ ] Retry Mechanism:** Auto retry failed operations with backoff strategies.
+    ```typescript
+    // Retry mechanism configuration
+    interface RetryConfig {
+      maxRetries: number;
+      backoffStrategy: 'exponential' | 'linear';
+    }
+
+    class RetryMechanism {
+      constructor(private config: RetryConfig) {}
+
+      async retry<T>(operation: () => Promise<T>): Promise<T> {
+        // Implement retry logic here
+      }
+    }
+    ```
+
+- **[ ] Connection Pooling:** Manage database connections for better performance.
+    ```typescript
+    // Connection pooling configuration
+    interface PoolConfig {
+      min: number;
+      max: number;
+      timeout: number;
+    }
+
+    class ConnectionPool {
+      constructor(private config: PoolConfig) {}
+
+      async acquire(): Promise<PrismaClient> {
+        // Implement connection pooling logic here
+      }
+
+      release(connection: PrismaClient): void {
+        // Implement connection release logic here
+      }
+    }
+    ```
+
+- **[ ] TypeScript Code-First to Prisma Schema Generator:** Generate Prisma schema from TypeScript models.
+    ```typescript
+    // TypeScript code-first to Prisma schema generator
+    function generatePrismaSchema(models: any[]): string {
+      // Implement schema generation logic here
+    }
+    ```
+
+## 🙌 Contribution
+
+Wanna help? Here’s how:
+
+1.  **Fork** the repo.
+2.  **Clone** your fork: `git clone https://github.com/alvamind/prisma-abstraction-alvamind.git`
+3.  **Create a branch**: `git checkout -b my-feature`
+4.  **Make changes**: Code, test, repeat.
+5.  **Commit**: `git commit -m "Add my feature"`
+6.  **Push**: `git push origin my-feature`
+7.  **Open a Pull Request**.
 
 **Before submitting a PR:**
 
-- Follow the existing code style.
-- Write tests.
-- Document your code.
-- Keep PRs small and focused.
+-   Keep the same code style.
+-   Write tests.
+-   Document your code.
+-   Keep PRs small and focused.
 
-## 🙏 Donation:
+## 🙏 Donation
 
-Show your support:
+Show some love:
 
-- **⭐️ Star** the repo.
-- **❤️ Sponsor** us on GitHub.
+-   **⭐️ Star** the repo.
+-   **❤️ Sponsor** us on GitHub.
 
 ## 📚 Documentation
 
-Visit our [comprehensive documentation](https://github.com/alvamind/prisma-abstraction-alvamind/wiki) for detailed guides, API references, and best practices.
+Check out our [docs](https://github.com/alvamind/prisma-abstraction-alvamind/wiki) for everything you need.
 
 ## 🤝 Community & Support
 
-- [GitHub Issues](https://github.com/alvamind/prisma-abstraction-alvamind/issues)
-- [Discord Community](https://discord.gg/prismastack)
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/prismastack)
-- [Twitter Updates](https://twitter.com/prismastack)
+-   [GitHub Issues](https://github.com/alvamind/prisma-abstraction-alvamind/issues)
+-   [Discord Community](https://discord.gg/prismastack)
+-   [Stack Overflow](https://stackoverflow.com/questions/tagged/prismastack)
+-   [Twitter Updates](https://twitter.com/prismastack)
 
 ## 📖 Citation
 
@@ -940,12 +1053,12 @@ Visit our [comprehensive documentation](https://github.com/alvamind/prisma-abstr
 }
 ```
 
-## 📜 Disclaimer:
+## 📜 Disclaimer
 
-This software is provided "as is", without warranty of any kind. Use at your own risk. We are not responsible for any damages or losses.
+This is "as is", no warranties. Use at your own risk.
 
-The Prisma name and logo are trademarks of Prisma Media, Inc. This project is not affiliated with or endorsed by Prisma Media, Inc. It is an independent, community-driven project created and maintained by [@alvamind](https://github.com/alvamind).
+Prisma logo and name are trademarks of Prisma Media, Inc. This project ain't affiliated with them. We're an independent community project by [@alvamind](https://github.com/alvamind).
 
 ## 🎉 That's All, Folks!
 
-Now go forth and build something amazing with PrismaStack! If you have any questions, feel free to open an issue or hit us up on Twitter. Peace out! ✌️
+Go build cool stuff with PrismaStack! Hit us up if you got questions. Peace! ✌️
