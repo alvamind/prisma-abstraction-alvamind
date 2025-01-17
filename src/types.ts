@@ -24,10 +24,6 @@ export type PrismaDelegate<T extends PrismaClientType, M extends ModelNames<T>> 
   ? InstanceType<T>[M]
   : never;
 
-// Helper type to infer return type of model operations
-export type InferPrismaModel<T extends PrismaClientType, M extends ModelNames<T>, Method extends keyof PrismaDelegate<T, M> = keyof PrismaDelegate<T, M>> =
-  Awaited<ReturnType<PrismaDelegate<T, M>[Method]>>;
-
 
 export type TransactionClient = Omit<
   PrismaClient,
@@ -36,16 +32,16 @@ export type TransactionClient = Omit<
 
 // Update ModelOperationTypes to use PrismaDelegate
 export type ModelOperationTypes<T extends PrismaClientType, M extends ModelNames<T>> = {
-  create: InferPrismaModel<T, M, 'create'>;
-  createMany: InferPrismaModel<T, M, 'createMany'>;
-  findMany: InferPrismaModel<T, M, 'findMany'>[];
-  findFirst: InferPrismaModel<T, M, 'findFirst'> | null;
-  findUnique: InferPrismaModel<T, M, 'findUnique'> | null;
-  update: InferPrismaModel<T, M, 'update'>;
-  updateMany: InferPrismaModel<T, M, 'updateMany'>;
-  delete: InferPrismaModel<T, M, 'delete'>;
-  deleteMany: InferPrismaModel<T, M, 'deleteMany'>;
-  upsert: InferPrismaModel<T, M, 'upsert'>;
+  create: Awaited<ReturnType<PrismaDelegate<T, M>['create']>>;
+  createMany: Awaited<ReturnType<PrismaDelegate<T, M>['createMany']>>;
+  findMany: Awaited<ReturnType<PrismaDelegate<T, M>['findMany']>>[];
+  findFirst: Awaited<ReturnType<PrismaDelegate<T, M>['findFirst']>> | null;
+  findUnique: Awaited<ReturnType<PrismaDelegate<T, M>['findUnique']>> | null;
+  update: Awaited<ReturnType<PrismaDelegate<T, M>['update']>>;
+  updateMany: Awaited<ReturnType<PrismaDelegate<T, M>['updateMany']>>;
+  delete: Awaited<ReturnType<PrismaDelegate<T, M>['delete']>>;
+  deleteMany: Awaited<ReturnType<PrismaDelegate<T, M>['deleteMany']>>;
+  upsert: Awaited<ReturnType<PrismaDelegate<T, M>['upsert']>>;
   count: number;
 };
 

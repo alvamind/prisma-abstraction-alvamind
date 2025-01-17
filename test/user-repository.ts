@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { BaseRepository, setPrismaClient } from '../src';
+import { BaseRepository, setPrismaClient } from '../dist';
 
 // Initialize PrismaStack (do this once in your app)
 const abc = setPrismaClient(new PrismaClient());

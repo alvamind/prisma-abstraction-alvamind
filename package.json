@@ -1,9 +1,9 @@
 {
   "name": "prisma-abstraction-alvamind",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Type-safe repository pattern abstraction for Prisma",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/types/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/alvamind/prisma-abstraction-alvamind.git"
@@ -24,7 +24,8 @@
     "publish-npm": "publish-npm patch",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "test:with-db": "docker compose up -d && bun test && docker compose down"
+    "test:with-db": "docker compose up -d && bun test && docker compose down",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [
     "prisma",
@@ -52,5 +53,12 @@
   "peerDependencies": {
     "typescript": "^5.0.0",
     "@prisma/client": "^6.2.1"
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/types/*"
+      ]
+    }
   }
 }

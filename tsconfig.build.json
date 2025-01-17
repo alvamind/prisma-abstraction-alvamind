@@ -12,7 +12,8 @@
     "esModuleInterop": true,
     "preserveConstEnums": true,
     "declarationMap": true,
-    "inlineSources": true
+    "inlineSources": true,
+    "declarationDir": "dist/types"
   },
   "include": ["src/**/*"],
   "exclude": ["test", "dist", "node_modules"]

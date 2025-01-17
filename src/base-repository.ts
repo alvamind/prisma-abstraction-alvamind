@@ -133,6 +133,7 @@ export abstract class BaseRepository<
     }
   }
 
+  // Use ModelOperationTypes here
   protected async softDelete(args: any): Promise<ModelOperationTypes<T, Model>['delete']> {
     if (!args?.where) {
       throw new Error('prisma-abstraction-alvamind: Where clause is required for soft delete');
@@ -147,7 +148,6 @@ export abstract class BaseRepository<
     this.currentTrx = undefined;
     return result as any;
   }
-
 
   protected async softDeleteMany(args: any): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
     const result = await this.updateMany({
@@ -190,7 +190,6 @@ export abstract class BaseRepository<
       this.currentTrx = undefined;
     }
   }
-
 
   public async count(
     args: Parameters<PrismaDelegate<T, Model>['count']>[0]
