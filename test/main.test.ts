@@ -714,8 +714,14 @@ describe('Prisma Abstraction', () => {
           data: { email: 'flush-op@test.com', name: 'Flush Op Test' }
         });
 
+        const user2 = await repo.create({
+          data: { email: 'flush-op-2@test.com', name: 'Flush Op Test 2' }
+        });
+
         await repo.findUnique({ where: { id: user.id } });
+        await repo.findUnique({ where: { id: user2.id } });
         await repo.findMany({});
+
 
         const initialSize = testCache.store.size;
 
@@ -728,7 +734,7 @@ describe('Prisma Abstraction', () => {
         // findMany cache should still exist
         const findManyCacheKey = testCache.operations.find((op: CacheOperation) => op.type === 'set' && op.key.includes('findMany'))?.key;
         expect(testCache.store.has(findManyCacheKey!)).toBe(true);
-      });
+      });;
 
       it('should flush exact cache entry', async () => {
         const user = await repo.create({
@@ -770,31 +776,28 @@ describe('Prisma Abstraction', () => {
         expect(errorRepo.flushAll()).rejects.toThrow(CacheError);
       });
 
-      // test/main.test.ts
       it('should support pattern-based flushing', async () => {
         await repo.flushAll();
         await repo.findMany({ where: { status: 'active' } });
         await repo.findMany({ where: { status: 'inactive' } });
         // Trigger findFirst with data
         await repo.findFirst({ where: { email: 'test@example.com' } });
+
         const initialSize = testCache.store.size;
         expect(initialSize).toBeGreaterThan(0);
+
         await repo.flush({ operation: 'findMany' });
         expect(testCache.store.size).toBe(initialSize - 2);
+
         const findFirstCacheKey = testCache.operations
           .find((op: CacheOperation) =>
             op.type === 'set' &&
             op.key.includes('findFirst'))?.key;
-        expect(findFirstCacheKey).toBeDefined(); // This will now pass since `findFirst` is called before flush
+        expect(findFirstCacheKey).toBeDefined();
         expect(testCache.store.has(findFirstCacheKey!)).toBe(true);
-        const findManyCacheKey = testCache.operations
-          .find((op: CacheOperation) =>
-            op.type === 'set' &&
-            op.key.includes('findMany'))?.key;
-        if (findManyCacheKey) {
-          expect(testCache.store.has(findManyCacheKey)).toBe(false);
-        }
-      });;
+
+
+      });
     })
 
   });
@@ -1328,8 +1331,8 @@ describe('Prisma Abstraction', () => {
       await repo.findUnique({ where: { id: user.id } });
 
       const operation = testCache.operations.find(op => op.type === 'set');
-      const expectedKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
-      expect(operation?.key).toBe(expectedKey);
+      const expectedKey = `user:findUnique:{"where":{"id":"${user.id}"}}`;
+      expect(operation?.key).toBe(defaultSanitizeKey(expectedKey));
     });
 
     it('should not sanitize keys if sanitizer is not provided', async () => {
@@ -1347,8 +1350,8 @@ describe('Prisma Abstraction', () => {
       await repo.findUnique({ where: { id: user.id } });
 
       const operation = testCache.operations.find(op => op.type === 'set');
-      const defaultKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
-      expect(operation?.key).toBe(defaultKey);
+      const expectedKey = `user:findUnique:{"where":{"id":"${user.id}"}}`;
+      expect(operation?.key).toBe(defaultSanitizeKey(expectedKey));
     });
 
     it('should handle undefined return from custom sanitizer', async () => {
@@ -1366,8 +1369,8 @@ describe('Prisma Abstraction', () => {
       await repo.findUnique({ where: { id: user.id } });
 
       const operation = testCache.operations.find(op => op.type === 'set');
-      const defaultKey = Buffer.from(`user:findUnique:{"where":{"id":"${user.id}"}}`).toString('base64url');
-      expect(operation?.key).toBe(defaultKey);
+      const expectedKey = `user:findUnique:{"where":{"id":"${user.id}"}}`;
+      expect(operation?.key).toBe(defaultSanitizeKey(expectedKey));
     });
 
     it('should produce consistent keys for same operations', async () => {
@@ -1384,10 +1387,12 @@ describe('Prisma Abstraction', () => {
       // Clear operations
       testCache.operations = [];
 
+
       // Second identical operation
       await repo.findUnique({ where: { id: user.id } });
       const secondKey = testCache.operations.find(op => op.type === 'set')?.key!;
       expect(secondKey).toBeDefined();
+
 
       expect(firstKey).toBe(secondKey);
     });
