@@ -195,7 +195,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
    * Flush cache entries based on pattern
    */
 
-  public async flush(pattern: FlushPattern = 'all'): Promise<void> {
+  protected async flush(pattern: FlushPattern = 'all'): Promise<void> {
     try {
       if (pattern === 'all') {
         await this.cache.clear();
@@ -214,27 +214,28 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
           // Delete all entries for specific operation
           const operationPrefix = `${modelName}:${operation.toLowerCase()}:`;
           const keys = await this.cache.keys();
-          for (const key of keys) {
-            if (key.toLowerCase().startsWith(operationPrefix)) {
-              await this.cache.delete(key);
-            }
-          }
+          const keysToDelete = keys.filter(key =>
+            key.toLowerCase().startsWith(operationPrefix.toLowerCase())
+          );
+
+          await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
         }
       } else {
         // Delete all entries for this model
         const modelPrefix = `${modelName}:`;
         const keys = await this.cache.keys();
-        for (const key of keys) {
-          if (key.toLowerCase().startsWith(modelPrefix)) {
-            await this.cache.delete(key);
-          }
-        }
+        const keysToDelete = keys.filter(key =>
+          key.toLowerCase().startsWith(modelPrefix.toLowerCase())
+        );
+
+        await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
       }
     } catch (error) {
       getConfig().logger?.error(`Cache flush failed: ${error}`);
       throw new CacheError('Failed to flush cache', error as Error);
     }
   }
+
 
 
 
@@ -248,8 +249,40 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   /**
    * Flush cache entries for specific operation
    */
+
+  private decodeKey(key: string): string {
+    const config = getConfig();
+    if (config.cacheConfig?.cacheKeySanitizer) {
+      // If there's a custom sanitizer, we should store the original keys mapping
+      return key;
+    }
+
+    // For default sanitizer (base64url), try to decode
+    try {
+      return Buffer.from(key, 'base64url').toString();
+    } catch {
+      return key;
+    }
+  }
+
+  private matchesOperation(key: string, operation: string): boolean {
+    const modelName = this.model.$name.toLowerCase();
+    const operationPattern = `${modelName}:${operation.toLowerCase()}:`;
+
+    const decodedKey = this.decodeKey(key).toLowerCase();
+    return decodedKey.includes(operationPattern);
+  }
+
   public async flushOperation(operation: string): Promise<void> {
-    return this.flush({ operation });
+    try {
+      const keys = await this.cache.keys();
+      const keysToDelete = keys.filter(key => this.matchesOperation(key, operation));
+
+      await Promise.all(keysToDelete.map(key => this.cache.delete(key)));
+    } catch (error) {
+      getConfig().logger?.error(`Cache flush failed: ${error}`);
+      throw new CacheError('Failed to flush cache', error as Error);
+    }
   }
 
   /**

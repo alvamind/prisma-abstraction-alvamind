@@ -713,7 +713,6 @@ describe('Prisma Abstraction', () => {
       });
 
       it('should flush specific operation cache', async () => {
-        // Clear existing cache first
         await testCache.clear();
 
         // Populate cache with different operations
@@ -733,7 +732,9 @@ describe('Prisma Abstraction', () => {
         await repo.findMany({});
 
         const initialKeys = await testCache.keys();
-        const findUniqueKeys = initialKeys.filter(k => k.includes('findunique'));
+        const findUniqueKeys = initialKeys.filter(k =>
+          repo['matchesOperation'](k, 'findUnique')
+        );
 
         // Flush only findUnique operations
         await repo.flushOperation('findUnique');
@@ -742,7 +743,7 @@ describe('Prisma Abstraction', () => {
 
         // Verify that only findUnique keys were removed
         expect(remainingKeys.length).toBe(initialKeys.length - findUniqueKeys.length);
-        expect(remainingKeys.some(k => k.includes('findunique'))).toBe(false);
+        expect(remainingKeys.some(k => repo['matchesOperation'](k, 'findunique'))).toBe(false);
       });
 
       it('should flush exact cache entry', async () => {
@@ -794,22 +795,27 @@ describe('Prisma Abstraction', () => {
           data: { email: 'pattern@test.com', name: 'Pattern Test' }
         });
 
+        // Cache multiple findMany results
         await repo.findMany({ where: { status: 'active' } });
         await repo.findMany({ where: { status: 'inactive' } });
+
+        // Cache findFirst result
         await repo.findFirst({ where: { email: 'pattern@test.com' } });
 
         const initialKeys = await testCache.keys();
-        const findManyKeys = initialKeys.filter(k => k.includes('findmany'));
+        const findManyKeys = initialKeys.filter(k =>
+          repo['matchesOperation'](k, 'findMany')
+        );
 
-        // Flush findMany operations
-        await repo.flush({ operation: 'findMany' });
+        // Use public flushOperation method
+        await repo.flushOperation('findMany');
 
         const remainingKeys = await testCache.keys();
 
         // Verify that only findMany keys were removed
         expect(remainingKeys.length).toBe(initialKeys.length - findManyKeys.length);
-        expect(remainingKeys.some(k => k.includes('findmany'))).toBe(false);
-        expect(remainingKeys.some(k => k.includes('findfirst'))).toBe(true);
+        expect(remainingKeys.some(k => repo['matchesOperation'](k, 'findMany'))).toBe(false);
+        expect(remainingKeys.some(k => repo['matchesOperation'](k, 'findFirst'))).toBe(true);
       });
     })
 
