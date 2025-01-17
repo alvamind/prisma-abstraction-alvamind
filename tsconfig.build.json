@@ -9,7 +9,10 @@
     "target": "ES2019",
     "moduleResolution": "node",
     "allowImportingTsExtensions": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "preserveConstEnums": true,
+    "declarationMap": true,
+    "inlineSources": true
   },
   "include": ["src/**/*"],
   "exclude": ["test", "dist", "node_modules"]

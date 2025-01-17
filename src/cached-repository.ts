@@ -2,7 +2,7 @@
 import { Sql } from '@prisma/client/runtime/library';
 import { BaseRepository } from './base-repository';
 import { getConfig } from './config';
-import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern } from './types';
+import { ModelNames, PrismaClientType, Cache, CacheOptions, CacheError, FlushPattern, PrismaDelegate, ModelOperationTypes } from './types';
 import { defaultSanitizeKey } from './utils';
 
 export abstract class CachedRepository<T extends PrismaClientType, Model extends ModelNames<T>> extends BaseRepository<T, Model> {
@@ -22,32 +22,30 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
 
   // Override methods to use cache options
   public override async findUnique(
-    args: Parameters<InstanceType<T>[Model]['findUnique']>[0],
+    args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0],
     options?: CacheOptions
-  ) {
-    const result = await this.cacheRead('findUnique', args, () => super.findUnique(args), options);
-    return result;
+  ): Promise<ModelOperationTypes<T, Model>['findUnique']> {
+    return this.cacheRead('findUnique', args, () => super.findUnique(args), options);
   }
 
   public override async findMany(
-    args: Parameters<InstanceType<T>[Model]['findMany']>[0],
+    args: Parameters<PrismaDelegate<T, Model>['findMany']>[0],
     options?: CacheOptions
-  ) {
-    const result = await this.cacheRead('findMany', args, () => super.findMany(args), options);
-    return result;
+  ): Promise<ModelOperationTypes<T, Model>['findMany']> {
+    return this.cacheRead('findMany', args, () => super.findMany(args), options);
   }
 
   public override async findFirst(
-    args: Parameters<InstanceType<T>[Model]['findFirst']>[0],
+    args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0],
     options?: CacheOptions
-  ) {
+  ): Promise<ModelOperationTypes<T, Model>['findFirst']> {
     return this.cacheRead('findFirst', args, () => super.findFirst(args), options);
   }
 
   public override async count(
-    args: Parameters<InstanceType<T>[Model]['count']>[0],
+    args: Parameters<PrismaDelegate<T, Model>['count']>[0],
     options?: CacheOptions
-  ) {
+  ): Promise<ModelOperationTypes<T, Model>['count']> {
     return this.cacheRead('count', args, () => super.count(args), options);
   }
 
@@ -66,7 +64,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   // Cache invalidation for write operations
   protected async invalidateAfterWrite(_operation: string, _args: any): Promise<void> {
     try {
-      const modelPrefix = `${this.model.$name.toLowerCase()}:`;
+      const modelPrefix = `${this.model['$name'].toLowerCase()}:`;
       await this.cache.delete(`${modelPrefix}*`);
     } catch (error) {
       getConfig().logger?.error(`Cache invalidation failed: ${error}`);
@@ -108,10 +106,8 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   }
 
 
-
-
   private getCacheKey(operation: string, args: any): string {
-    const modelName = this.model.$name.toLowerCase();
+    const modelName = this.model['$name'].toLowerCase();
     operation = operation.toLowerCase();
     const key = `${modelName}:${operation}:${JSON.stringify(args)}`;
 
@@ -127,32 +123,32 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
 
   // Override example for write operations
   public override async create(
-    args: Parameters<InstanceType<T>[Model]['create']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['create']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['create']> {
     const result = await super.create(args);
     await this.invalidateAfterWrite('create', args);
     return result;
   }
 
   public override async createMany(
-    args: Parameters<InstanceType<T>[Model]['createMany']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['createMany']> {
     const result = await super.createMany(args);
     await this.invalidateAfterWrite('createMany', args);
     return result;
   }
 
   public override async delete(
-    args: Parameters<InstanceType<T>[Model]['delete']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['delete']> {
     const result = await super.delete(args);
     await this.invalidateAfterWrite('delete', args);
     return result;
   }
 
   public override async deleteMany(
-    args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
     const result = await super.deleteMany(args);
     await this.invalidateAfterWrite('deleteMany', args);
     return result;
@@ -168,24 +164,24 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   }
 
   public override async update(
-    args: Parameters<InstanceType<T>[Model]['update']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['update']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['update']> {
     const result = await super.update(args);
     await this.invalidateAfterWrite('update', args);
     return result;
   }
 
   public override async updateMany(
-    args: Parameters<InstanceType<T>[Model]['updateMany']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['updateMany']> {
     const result = await super.updateMany(args);
     await this.invalidateAfterWrite('updateMany', args);
     return result;
   }
 
   public override async upsert(
-    args: Parameters<InstanceType<T>[Model]['upsert']>[0]
-  ) {
+    args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['upsert']> {
     const result = await super.upsert(args);
     await this.invalidateAfterWrite('upsert', args);
     return result;
@@ -203,7 +199,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
       }
 
       const { operation, args } = pattern;
-      const modelName = this.model.$name.toLowerCase();
+      const modelName = this.model['$name'].toLowerCase();
 
       if (operation) {
         if (args) {
@@ -266,7 +262,7 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
   }
 
   private matchesOperation(key: string, operation: string): boolean {
-    const modelName = this.model.$name.toLowerCase();
+    const modelName = this.model['$name'].toLowerCase();
     const operationPattern = `${modelName}:${operation.toLowerCase()}:`;
 
     const decodedKey = this.decodeKey(key).toLowerCase();

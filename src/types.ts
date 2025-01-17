@@ -1,10 +1,53 @@
 // src/types.ts
-
 import { PrismaClient } from '@prisma/client';
 
-export type PrismaClientType = new () => any;
-export type ModelNames<T extends PrismaClientType> = keyof Omit<InstanceType<T>, keyof Function>;
-export type TransactionClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
+export type PrismaClientType = typeof PrismaClient;
+
+// Updated ModelNames type
+export type ModelNames<T extends PrismaClientType> = keyof Omit<
+  InstanceType<T>,
+  | '$connect'
+  | '$disconnect'
+  | '$on'
+  | '$transaction'
+  | '$use'
+  | '$extends'
+>;
+
+// Helper type to get model type from PrismaClient
+export type PrismaModel<T extends PrismaClientType, M extends ModelNames<T>> =
+  InstanceType<T>[M];
+
+// Helper type to get model delegate type
+export type PrismaDelegate<T extends PrismaClientType, M extends ModelNames<T>> =
+  InstanceType<T>[M] extends { [K: string]: any }
+  ? InstanceType<T>[M]
+  : never;
+
+// Helper type to infer return type of model operations
+export type InferPrismaModel<T extends PrismaClientType, M extends ModelNames<T>, Method extends keyof PrismaDelegate<T, M> = keyof PrismaDelegate<T, M>> =
+  Awaited<ReturnType<PrismaDelegate<T, M>[Method]>>;
+
+
+export type TransactionClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
+
+// Update ModelOperationTypes to use PrismaDelegate
+export type ModelOperationTypes<T extends PrismaClientType, M extends ModelNames<T>> = {
+  create: InferPrismaModel<T, M, 'create'>;
+  createMany: InferPrismaModel<T, M, 'createMany'>;
+  findMany: InferPrismaModel<T, M, 'findMany'>[];
+  findFirst: InferPrismaModel<T, M, 'findFirst'> | null;
+  findUnique: InferPrismaModel<T, M, 'findUnique'> | null;
+  update: InferPrismaModel<T, M, 'update'>;
+  updateMany: InferPrismaModel<T, M, 'updateMany'>;
+  delete: InferPrismaModel<T, M, 'delete'>;
+  deleteMany: InferPrismaModel<T, M, 'deleteMany'>;
+  upsert: InferPrismaModel<T, M, 'upsert'>;
+  count: number;
+};
 
 export interface CacheOperation {
   type: 'get' | 'set' | 'delete' | 'clear';
@@ -68,17 +111,3 @@ export class CacheError extends Error {
     this.name = 'CacheError';
   }
 }
-
-export type ModelOperationTypes<T extends PrismaClientType, Model extends ModelNames<T>> = {
-  create: ReturnType<InstanceType<T>[Model]['create']>;
-  createMany: ReturnType<InstanceType<T>[Model]['createMany']>;
-  findMany: ReturnType<InstanceType<T>[Model]['findMany']>;
-  findFirst: ReturnType<InstanceType<T>[Model]['findFirst']>;
-  findUnique: ReturnType<InstanceType<T>[Model]['findUnique']>;
-  update: ReturnType<InstanceType<T>[Model]['update']>;
-  updateMany: ReturnType<InstanceType<T>[Model]['updateMany']>;
-  delete: ReturnType<InstanceType<T>[Model]['delete']>;
-  deleteMany: ReturnType<InstanceType<T>[Model]['deleteMany']>;
-  upsert: ReturnType<InstanceType<T>[Model]['upsert']>;
-  count: ReturnType<InstanceType<T>[Model]['count']>;
-};

@@ -1,14 +1,14 @@
 // src/base-repository.ts
 import { PrismaClient } from '@prisma/client';
-import { ModelNames, PrismaClientType, TransactionClient, ModelOperationTypes } from './types';
+import { ModelNames, PrismaClientType, TransactionClient, PrismaDelegate, ModelOperationTypes } from './types';
 import { getConfig, getPrismaClient } from './config';
 import { Sql } from '@prisma/client/runtime/library';
 
 export abstract class BaseRepository<
-  T extends PrismaClientType,
-  Model extends ModelNames<T>
+  T extends PrismaClientType = typeof PrismaClient,
+  Model extends ModelNames<T> = ModelNames<T>
 > {
-  protected model: InstanceType<T>[Model];
+  protected model: PrismaDelegate<T, Model>;
   protected prisma: PrismaClient;
   protected currentTrx?: TransactionClient;
 
@@ -16,11 +16,12 @@ export abstract class BaseRepository<
     try {
       const modelName = this.getModelName();
       this.prisma = getPrismaClient();
-      // Add type check to prevent runtime errors
-      if (!(modelName in this.prisma)) {
-        throw new Error(`prisma-abstraction-alvamind: Invalid model name: ${String(modelName)}`);
+
+      if (!(modelName in this.prisma) || typeof this.prisma[modelName] !== 'object') {
+        throw new Error(`Invalid model name: ${String(modelName)}`);
       }
-      this.model = this.prisma[modelName as keyof PrismaClient] as InstanceType<T>[Model];
+
+      this.model = this.prisma[modelName as keyof typeof this.prisma] as PrismaDelegate<T, Model>;
       getConfig().logger?.info(`${String(modelName)} Repository initialized`);
     } catch (e) {
       getConfig().logger?.error(`prisma-abstraction-alvamind:: Repository initialization failed: ${e}`);
@@ -44,91 +45,91 @@ export abstract class BaseRepository<
   }
 
   // Add cleanup for transaction reference
-  protected getClient(): InstanceType<T>[Model] {
-    const client = this.currentTrx?.[this.model.$name as keyof TransactionClient] ?? this.model;
+  protected getClient<Client extends PrismaDelegate<T, Model>>(): Client {
+    const client = (this.currentTrx?.[this.getModelName() as keyof TransactionClient] ?? this.model) as Client;
     if (!client) {
       throw new Error('prisma-abstraction-alvamind: Invalid prisma client state');
     }
-    return client as InstanceType<T>[Model];
+    return client;
   }
 
   public async create(
-    args: Parameters<InstanceType<T>[Model]['create']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['create']>[0]
   ): Promise<ModelOperationTypes<T, Model>['create']> {
     try {
-      return await this.getClient().create(args);
+      return await this.getClient()['create'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async createMany(
-    args: Parameters<InstanceType<T>[Model]['createMany']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]
   ): Promise<ModelOperationTypes<T, Model>['createMany']> {
     try {
-      return await this.getClient().createMany(args);
+      return await this.getClient()['createMany'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async findMany(
-    args: Parameters<InstanceType<T>[Model]['findMany']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['findMany']>[0]
   ): Promise<ModelOperationTypes<T, Model>['findMany']> {
     try {
-      return await this.getClient().findMany(args);
+      return await this.getClient()['findMany'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async findFirst(
-    args: Parameters<InstanceType<T>[Model]['findFirst']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0]
   ): Promise<ModelOperationTypes<T, Model>['findFirst']> {
     try {
-      return await this.getClient().findFirst(args);
+      return await this.getClient()['findFirst'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async findUnique(
-    args: Parameters<InstanceType<T>[Model]['findUnique']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0]
   ): Promise<ModelOperationTypes<T, Model>['findUnique']> {
     try {
-      return await this.getClient().findUnique(args);
+      return await this.getClient()['findUnique'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async delete(
-    args: Parameters<InstanceType<T>[Model]['delete']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
   ): Promise<ModelOperationTypes<T, Model>['delete']> {
     try {
       if (getConfig().softDelete) {
-        return this.softDelete(args);
+        return await this.softDelete(args);
       }
-      return await this.getClient().delete(args);
+      return await this.getClient()['delete'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async deleteMany(
-    args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
   ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
     try {
       if (getConfig().softDelete) {
-        return this.softDeleteMany(args);
+        return await this.softDeleteMany(args);
       }
-      return await this.getClient().deleteMany(args);
+      return await this.getClient()['deleteMany'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
-  protected async softDelete(args: any) {
+  protected async softDelete(args: any): Promise<ModelOperationTypes<T, Model>['delete']> {
     if (!args?.where) {
       throw new Error('prisma-abstraction-alvamind: Where clause is required for soft delete');
     }
@@ -138,13 +139,14 @@ export abstract class BaseRepository<
         ...(args.data || {}),
         deletedAt: new Date(),
       },
-    });
+    })
     this.currentTrx = undefined;
-    return result;
+    return result as any;
   }
 
-  protected softDeleteMany = (args: any) => {
-    const result = this.updateMany({
+
+  protected async softDeleteMany(args: any): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
+    const result = await this.updateMany({
       where: args.where,
       data: {
         ...(args.data || {}),
@@ -152,44 +154,45 @@ export abstract class BaseRepository<
       },
     });
     this.currentTrx = undefined;
-    return result;
+    return result as any;
   };
 
   public async update(
-    args: Parameters<InstanceType<T>[Model]['update']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['update']>[0]
   ): Promise<ModelOperationTypes<T, Model>['update']> {
     try {
-      return await this.getClient().update(args);
+      return await this.getClient()['update'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async updateMany(
-    args: Parameters<InstanceType<T>[Model]['updateMany']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]
   ): Promise<ModelOperationTypes<T, Model>['updateMany']> {
     try {
-      return await this.getClient().updateMany(args);
+      return await this.getClient()['updateMany'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
   public async upsert(
-    args: Parameters<InstanceType<T>[Model]['upsert']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]
   ): Promise<ModelOperationTypes<T, Model>['upsert']> {
     try {
-      return await this.getClient().upsert(args);
+      return await this.getClient()['upsert'](args);
     } finally {
       this.currentTrx = undefined;
     }
   }
 
+
   public async count(
-    args: Parameters<InstanceType<T>[Model]['count']>[0]
+    args: Parameters<PrismaDelegate<T, Model>['count']>[0]
   ): Promise<ModelOperationTypes<T, Model>['count']> {
     try {
-      return await this.getClient().count(args);
+      return await this.getClient()['count'](args);
     } finally {
       this.currentTrx = undefined;
     }
@@ -247,13 +250,13 @@ export abstract class BaseRepository<
   /* ====================================================== */
 
   public async isExist<
-    Where extends Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { where?: infer W } ? W : never,
-    Select extends Parameters<InstanceType<T>[Model]['findFirst']>[0] extends { select?: infer S } ? S : never
+    Where extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { where?: infer W } ? W : never,
+    Select extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { select?: infer S } ? S : never
   >(
     where: Where,
     select?: Select
   ): Promise<boolean> {
-    const result = await this.getClient().findFirst({
+    const result = await this.getClient()['findFirst']({
       where,
       select: select ? select : { id: true } as any
     });
@@ -261,7 +264,7 @@ export abstract class BaseRepository<
   }
 
   public async findManyWithPagination<
-    Args extends Parameters<InstanceType<T>[Model]['findMany']>[0] = Parameters<InstanceType<T>[Model]['findMany']>[0]
+    Args extends Parameters<PrismaDelegate<T, Model>['findMany']>[0] = Parameters<PrismaDelegate<T, Model>['findMany']>[0]
   >(args: {
     page?: number;
     pageSize?: number;
@@ -300,7 +303,7 @@ export abstract class BaseRepository<
   }
 
   public async restoreById<
-    Args extends Parameters<InstanceType<T>[Model]['update']>[0] = Parameters<InstanceType<T>[Model]['update']>[0]
+    Args extends Parameters<PrismaDelegate<T, Model>['update']>[0] = Parameters<PrismaDelegate<T, Model>['update']>[0]
   >(
     id: string,
     data?: Args extends { data?: infer D } ? Omit<D, 'deletedAt'> : never
