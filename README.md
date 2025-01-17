@@ -122,9 +122,15 @@ bunx prisma generate
 import { PrismaClient } from '@prisma/client';
 import { BaseRepository, setPrismaClient } from 'prisma-abstraction-alvamind';
 
-// Initialize PrismaStack (do this once in your app)
-setPrismaClient(new PrismaClient());
+// Initialize Prisma client with prisma-abstraction
+const prisma = setPrismaClient(new PrismaClient());
 
+// Now you can chain prisma operations
+prisma.$connect()
+  .then(() => console.log('Connected'))
+  .catch(console.error);
+
+// Repository usage with proper types
 export class UserRepository extends BaseRepository<typeof PrismaClient, 'user'> {}
 ```
 
@@ -910,8 +916,6 @@ Show your support:
 
 - **⭐️ Star** the repo.
 - **❤️ Sponsor** us on GitHub.
-- **BTC**: `bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh`
-- **ETH**: `0x6555779992545E5D389f9555537c85A555d95595`
 
 ## 📚 Documentation
 

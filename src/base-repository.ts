@@ -1,6 +1,6 @@
 // src/base-repository.ts
 import { PrismaClient } from '@prisma/client';
-import { ModelNames, PrismaClientType, TransactionClient } from './types';
+import { ModelNames, PrismaClientType, TransactionClient, ModelOperationTypes } from './types';
 import { getConfig, getPrismaClient } from './config';
 import { Sql } from '@prisma/client/runtime/library';
 
@@ -52,43 +52,59 @@ export abstract class BaseRepository<
     return client as InstanceType<T>[Model];
   }
 
-  public async create(args: Parameters<InstanceType<T>[Model]['create']>[0]) {
+  public async create(
+    args: Parameters<InstanceType<T>[Model]['create']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['create']> {
     try {
       return await this.getClient().create(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async createMany(args: Parameters<InstanceType<T>[Model]['createMany']>[0]) {
+
+  public async createMany(
+    args: Parameters<InstanceType<T>[Model]['createMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['createMany']> {
     try {
       return await this.getClient().createMany(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async findMany(args: Parameters<InstanceType<T>[Model]['findMany']>[0]) {
+
+  public async findMany(
+    args: Parameters<InstanceType<T>[Model]['findMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['findMany']> {
     try {
       return await this.getClient().findMany(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async findFirst(args: Parameters<InstanceType<T>[Model]['findFirst']>[0]) {
+
+  public async findFirst(
+    args: Parameters<InstanceType<T>[Model]['findFirst']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['findFirst']> {
     try {
       return await this.getClient().findFirst(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async findUnique(args: Parameters<InstanceType<T>[Model]['findUnique']>[0]) {
+
+  public async findUnique(
+    args: Parameters<InstanceType<T>[Model]['findUnique']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['findUnique']> {
     try {
       return await this.getClient().findUnique(args);
     } finally {
       this.currentTrx = undefined;
     }
-
   }
-  public async delete(args: Parameters<InstanceType<T>[Model]['delete']>[0]) {
+
+  public async delete(
+    args: Parameters<InstanceType<T>[Model]['delete']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['delete']> {
     try {
       if (getConfig().softDelete) {
         return this.softDelete(args);
@@ -98,7 +114,10 @@ export abstract class BaseRepository<
       this.currentTrx = undefined;
     }
   }
-  public async deleteMany(args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]) {
+
+  public async deleteMany(
+    args: Parameters<InstanceType<T>[Model]['deleteMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
     try {
       if (getConfig().softDelete) {
         return this.softDeleteMany(args);
@@ -136,35 +155,50 @@ export abstract class BaseRepository<
     return result;
   };
 
-  public async update(args: Parameters<InstanceType<T>[Model]['update']>[0]) {
+  public async update(
+    args: Parameters<InstanceType<T>[Model]['update']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['update']> {
     try {
       return await this.getClient().update(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async updateMany(args: Parameters<InstanceType<T>[Model]['updateMany']>[0]) {
+
+  public async updateMany(
+    args: Parameters<InstanceType<T>[Model]['updateMany']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['updateMany']> {
     try {
       return await this.getClient().updateMany(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async upsert(args: Parameters<InstanceType<T>[Model]['upsert']>[0]) {
+
+  public async upsert(
+    args: Parameters<InstanceType<T>[Model]['upsert']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['upsert']> {
     try {
       return await this.getClient().upsert(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async count(args: Parameters<InstanceType<T>[Model]['count']>[0]) {
+
+  public async count(
+    args: Parameters<InstanceType<T>[Model]['count']>[0]
+  ): Promise<ModelOperationTypes<T, Model>['count']> {
     try {
       return await this.getClient().count(args);
     } finally {
       this.currentTrx = undefined;
     }
   }
-  public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
+
+  public async $executeRaw(
+    query: TemplateStringsArray | Sql,
+    ...values: any[]
+  ): Promise<number> {
     try {
       if (!query) throw new Error('prisma-abstraction-alvamind: Query is required');
       const client = this.currentTrx ?? this.prisma;
@@ -173,6 +207,7 @@ export abstract class BaseRepository<
       this.currentTrx = undefined;
     }
   }
+
   public async $queryRaw<P = any>(
     query: TemplateStringsArray | Sql,
     ...values: any[]
@@ -185,7 +220,10 @@ export abstract class BaseRepository<
     }
   }
 
-  public async $transaction<P>(fn: (prisma: TransactionClient) => Promise<P>, options?: { timeout?: number }): Promise<P> {
+  public async $transaction<P>(
+    fn: (prisma: TransactionClient) => Promise<P>,
+    options?: { timeout?: number }
+  ): Promise<P> {
     const timeout = options?.timeout ?? 5000;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -196,10 +234,10 @@ export abstract class BaseRepository<
         this.prisma.$transaction(fn),
         timeoutPromise
       ]);
-      if (timeoutId) clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId);
       return result;
     } catch (e) {
-      throw e
+      throw e;
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       this.currentTrx = undefined;
@@ -266,7 +304,7 @@ export abstract class BaseRepository<
   >(
     id: string,
     data?: Args extends { data?: infer D } ? Omit<D, 'deletedAt'> : never
-  ): Promise<Awaited<ReturnType<InstanceType<T>[Model]['update']>>> {
+  ): Promise<ModelOperationTypes<T, Model>['update']> {
     if (!getConfig().softDelete) {
       throw new Error('prisma-abstraction-alvamind: Restore operation is only available when softDelete is enabled');
     }
@@ -282,5 +320,4 @@ export abstract class BaseRepository<
     this.currentTrx = undefined;
     return result;
   }
-
 }

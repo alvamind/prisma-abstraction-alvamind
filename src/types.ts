@@ -6,7 +6,6 @@ export type PrismaClientType = new () => any;
 export type ModelNames<T extends PrismaClientType> = keyof Omit<InstanceType<T>, keyof Function>;
 export type TransactionClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
-
 export interface CacheOperation {
   type: 'get' | 'set' | 'delete' | 'clear';
   key: string;
@@ -69,3 +68,17 @@ export class CacheError extends Error {
     this.name = 'CacheError';
   }
 }
+
+export type ModelOperationTypes<T extends PrismaClientType, Model extends ModelNames<T>> = {
+  create: ReturnType<InstanceType<T>[Model]['create']>;
+  createMany: ReturnType<InstanceType<T>[Model]['createMany']>;
+  findMany: ReturnType<InstanceType<T>[Model]['findMany']>;
+  findFirst: ReturnType<InstanceType<T>[Model]['findFirst']>;
+  findUnique: ReturnType<InstanceType<T>[Model]['findUnique']>;
+  update: ReturnType<InstanceType<T>[Model]['update']>;
+  updateMany: ReturnType<InstanceType<T>[Model]['updateMany']>;
+  delete: ReturnType<InstanceType<T>[Model]['delete']>;
+  deleteMany: ReturnType<InstanceType<T>[Model]['deleteMany']>;
+  upsert: ReturnType<InstanceType<T>[Model]['upsert']>;
+  count: ReturnType<InstanceType<T>[Model]['count']>;
+};

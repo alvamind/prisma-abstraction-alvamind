@@ -14,12 +14,13 @@ let globalConfig: Config = {
 };
 let initialized = false;
 
-export function setPrismaClient(prisma: PrismaClient) {
+export function setPrismaClient(prisma: PrismaClient): PrismaClient {
   if (!prisma) {
     throw new Error('Invalid PrismaClient instance');
   }
   prismaInstance = prisma;
   initialized = true;
+  return prisma;
 }
 
 export function getPrismaClient(): PrismaClient {
