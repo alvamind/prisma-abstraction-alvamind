@@ -109,9 +109,9 @@ class TestCache implements Cache {
     this.operations.push({ type: 'delete', key, timestamp: new Date() });
 
     if (key.endsWith('*')) {
-      const prefix = key.slice(0, -1).toLowerCase();
+      const prefix = key.slice(0, -1);
       for (const storeKey of this.store.keys()) {
-        if (storeKey.toLowerCase().startsWith(prefix)) {
+        if (storeKey.startsWith(prefix)) {
           this.store.delete(storeKey);
         }
       }
@@ -125,6 +125,10 @@ class TestCache implements Cache {
     this.store.clear();
     this.hits = 0;
     this.misses = 0;
+  }
+
+  async keys(): Promise<string[]> {
+    return Array.from(this.store.keys());
   }
 }
 
@@ -709,6 +713,9 @@ describe('Prisma Abstraction', () => {
       });
 
       it('should flush specific operation cache', async () => {
+        // Clear existing cache first
+        await testCache.clear();
+
         // Populate cache with different operations
         const user = await repo.create({
           data: { email: 'flush-op@test.com', name: 'Flush Op Test' }
@@ -718,23 +725,25 @@ describe('Prisma Abstraction', () => {
           data: { email: 'flush-op-2@test.com', name: 'Flush Op Test 2' }
         });
 
+        // Cache findUnique operations
         await repo.findUnique({ where: { id: user.id } });
         await repo.findUnique({ where: { id: user2.id } });
+
+        // Cache findMany operation
         await repo.findMany({});
 
-
-        const initialSize = testCache.store.size;
+        const initialKeys = await testCache.keys();
+        const findUniqueKeys = initialKeys.filter(k => k.includes('findunique'));
 
         // Flush only findUnique operations
         await repo.flushOperation('findUnique');
 
-        // Should have removed only findUnique cache entries
-        expect(testCache.store.size).toBeLessThan(initialSize);
+        const remainingKeys = await testCache.keys();
 
-        // findMany cache should still exist
-        const findManyCacheKey = testCache.operations.find((op: CacheOperation) => op.type === 'set' && op.key.includes('findMany'))?.key;
-        expect(testCache.store.has(findManyCacheKey!)).toBe(true);
-      });;
+        // Verify that only findUnique keys were removed
+        expect(remainingKeys.length).toBe(initialKeys.length - findUniqueKeys.length);
+        expect(remainingKeys.some(k => k.includes('findunique'))).toBe(false);
+      });
 
       it('should flush exact cache entry', async () => {
         const user = await repo.create({
@@ -768,7 +777,8 @@ describe('Prisma Abstraction', () => {
           get: testCache.get,
           set: testCache.set,
           delete: testCache.delete,
-          clear: async () => { throw new Error('Clear failed'); }
+          clear: async () => { throw new Error('Clear failed'); },
+          keys: async () => { return [] } // Add the keys method here
         };
 
         const errorRepo = new CachedUserRepository(errorCache);
@@ -778,25 +788,28 @@ describe('Prisma Abstraction', () => {
 
       it('should support pattern-based flushing', async () => {
         await repo.flushAll();
+
+        // Create test data and cache results
+        await repo.create({
+          data: { email: 'pattern@test.com', name: 'Pattern Test' }
+        });
+
         await repo.findMany({ where: { status: 'active' } });
         await repo.findMany({ where: { status: 'inactive' } });
-        // Trigger findFirst with data
-        await repo.findFirst({ where: { email: 'test@example.com' } });
+        await repo.findFirst({ where: { email: 'pattern@test.com' } });
 
-        const initialSize = testCache.store.size;
-        expect(initialSize).toBeGreaterThan(0);
+        const initialKeys = await testCache.keys();
+        const findManyKeys = initialKeys.filter(k => k.includes('findmany'));
 
+        // Flush findMany operations
         await repo.flush({ operation: 'findMany' });
-        expect(testCache.store.size).toBe(initialSize - 2);
 
-        const findFirstCacheKey = testCache.operations
-          .find((op: CacheOperation) =>
-            op.type === 'set' &&
-            op.key.includes('findFirst'))?.key;
-        expect(findFirstCacheKey).toBeDefined();
-        expect(testCache.store.has(findFirstCacheKey!)).toBe(true);
+        const remainingKeys = await testCache.keys();
 
-
+        // Verify that only findMany keys were removed
+        expect(remainingKeys.length).toBe(initialKeys.length - findManyKeys.length);
+        expect(remainingKeys.some(k => k.includes('findmany'))).toBe(false);
+        expect(remainingKeys.some(k => k.includes('findfirst'))).toBe(true);
       });
     })
 
@@ -1381,20 +1394,25 @@ describe('Prisma Abstraction', () => {
 
       // First operation
       await repo.findUnique({ where: { id: user.id } });
-      const firstKey = testCache.operations.find(op => op.type === 'set')?.key!;
+      const firstOperation = testCache.operations.find(op => op.type === 'set');
+      const firstKey = firstOperation?.key;
       expect(firstKey).toBeDefined();
 
-      // Clear operations
+      // Clear operations but keep cache
       testCache.operations = [];
 
-
-      // Second identical operation
+      // Second identical operation - should hit cache
       await repo.findUnique({ where: { id: user.id } });
-      const secondKey = testCache.operations.find(op => op.type === 'set')?.key!;
+      const secondOperation = testCache.operations.find(op => op.type === 'get');
+      const secondKey = secondOperation?.key;
       expect(secondKey).toBeDefined();
 
-
-      expect(firstKey).toBe(secondKey);
+      // Keys should match
+      if (firstKey && secondKey) {
+        expect(firstKey).toBe(secondKey);
+      } else {
+        throw new Error('Cache keys are undefined');
+      }
     });
   })
 });

@@ -213,11 +213,22 @@ export abstract class CachedRepository<T extends PrismaClientType, Model extends
         } else {
           // Delete all entries for specific operation
           const operationPrefix = `${modelName}:${operation.toLowerCase()}:`;
-          await this.cache.delete(`${operationPrefix}*`);
+          const keys = await this.cache.keys();
+          for (const key of keys) {
+            if (key.toLowerCase().startsWith(operationPrefix)) {
+              await this.cache.delete(key);
+            }
+          }
         }
       } else {
         // Delete all entries for this model
-        await this.cache.delete(`${modelName}:*`);
+        const modelPrefix = `${modelName}:`;
+        const keys = await this.cache.keys();
+        for (const key of keys) {
+          if (key.toLowerCase().startsWith(modelPrefix)) {
+            await this.cache.delete(key);
+          }
+        }
       }
     } catch (error) {
       getConfig().logger?.error(`Cache flush failed: ${error}`);
