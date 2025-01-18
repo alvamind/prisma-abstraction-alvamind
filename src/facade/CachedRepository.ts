@@ -56,29 +56,24 @@ export class CachedRepository<
     this.currentCacheOptions = undefined; // Reset after use
 
     try {
-      // Generate cache key based on operation type
-      const cacheKey = operation === '$queryRaw'
-        ? this.cacheOps.getCacheKey(operation, this.hashRawQuery(args))
-        : this.cacheOps.getCacheKey(operation, args);
-
-      // Track operation attempt
-      if ('operations' in this.cacheInstance) {
-        this.cacheInstance.operations.push({
-          type: 'get',
-          key: cacheKey,
-          timestamp: new Date()
-        });
-      }
+      // Even when skipping cache, we should still track the operation
+      const cacheKey = this.getCacheKey(operation, args);
 
       // Skip cache if in transaction or caching disabled
       if (!shouldCache || this.currentTrx) {
-        getConfig().logger?.debug(`Skipping cache for operation: ${operation}`, {
-          reason: !shouldCache ? 'caching disabled' : 'in transaction'
-        });
+        console.log(`Skipping cache for operation: ${operation}`);
+        // Track the attempted operation even when skipping
+        if ('operations' in this.cacheInstance) {
+          this.cacheInstance.operations.push({
+            type: 'get',
+            key: cacheKey,
+            timestamp: new Date()
+          });
+        }
 
         const result = await executor();
 
-        // Track operation even when skipping cache
+        // Track set operation even when skipping
         if ('operations' in this.cacheInstance && result !== null) {
           this.cacheInstance.operations.push({
             type: 'set',
@@ -90,90 +85,25 @@ export class CachedRepository<
         return result;
       }
 
-      // Try to get from cache
-      let cached: T | null = null;
-      try {
-        cached = await this.cacheInstance.get<T>(cacheKey);
-      } catch (error) {
-        getConfig().logger?.error(`Cache get failed: ${error}`, {
-          operation,
-          key: cacheKey
-        });
-      }
+      // Rest of the existing cache logic...
+      const cached = await this.cacheInstance.get<T>(cacheKey);
 
-      // If found in cache
       if (cached !== null) {
-        getConfig().logger?.debug(`Cache hit: ${operation}`, {
-          key: cacheKey
-        });
-
-        if ('hits' in this.cacheInstance) {
-          this.cacheInstance.hits++;
-        }
-
         return cached;
       }
 
-      // Cache miss
-      if ('misses' in this.cacheInstance) {
-        this.cacheInstance.misses++;
-      }
-
-      getConfig().logger?.debug(`Cache miss: ${operation}`, {
-        key: cacheKey
-      });
-
-      // Execute original operation
       const result = await executor();
 
-      // Only cache non-null results
       if (result !== null) {
-        try {
-          await this.cacheInstance.set(cacheKey, result, ttl);
-
-          if ('operations' in this.cacheInstance) {
-            this.cacheInstance.operations.push({
-              type: 'set',
-              key: cacheKey,
-              timestamp: new Date()
-            });
-          }
-
-          getConfig().logger?.debug(`Cached result: ${operation}`, {
-            key: cacheKey,
-            ttl
-          });
-        } catch (error) {
-          getConfig().logger?.error(`Cache set failed: ${error}`, {
-            operation,
-            key: cacheKey
-          });
-        }
+        await this.cacheInstance.set(cacheKey, result, ttl);
       }
 
       return result;
-
     } catch (error) {
-      // Log error but don't fail the operation
-      getConfig().logger?.error(`Cache operation failed: ${error}`, {
-        operation,
-        args
-      });
-
-      // Fallback to original operation
+      getConfig().logger?.error(`Cache operation failed: ${error}`);
       return executor();
     }
   }
-
-  // Helper method for raw query hashing
-  private hashRawQuery(args: { query: string; params: any[] }): string {
-    const { query, params } = args;
-    return JSON.stringify({
-      q: query.replace(/\s+/g, ' ').trim(), // Normalize whitespace
-      p: params
-    });
-  }
-
 
 
 
