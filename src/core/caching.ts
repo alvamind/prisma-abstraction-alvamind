@@ -9,14 +9,18 @@ export function createCachingOperations(
 ) {
   const getCacheKey = (operation: string, args: any): string => {
     const key = `${modelName.toLowerCase()}:${operation.toLowerCase()}:${JSON.stringify(args)}`;
+    console.log(`Generated raw cache key: ${key}`);
 
     const config = getConfig();
     if (config.cacheConfig?.cacheKeySanitizer) {
       const sanitized = config.cacheConfig.cacheKeySanitizer(key);
+      console.log(`Sanitized cache key: ${sanitized}`);
       if (sanitized) return sanitized;
     }
 
-    return defaultSanitizeKey(key);
+    const defaultKey = defaultSanitizeKey(key);
+    console.log(`Default sanitized cache key: ${defaultKey}`);
+    return defaultKey;
   };
 
   const decodeKey = (key: string): string => {
@@ -35,6 +39,7 @@ export function createCachingOperations(
   const matchesOperation = (key: string, operation: string): boolean => {
     const operationPattern = `${modelName.toLowerCase()}:${operation.toLowerCase()}:`;
     const decodedKey = decodeKey(key).toLowerCase();
+    console.log(`Checking if key matches operation: ${decodedKey} includes ${operationPattern}`);
     return decodedKey.includes(operationPattern);
   };
 
@@ -182,30 +187,3 @@ export function createCachingOperations(
 }
 
 export type CachingOperations = ReturnType<typeof createCachingOperations>;
-
-// Helper types
-export interface CacheResult<T> {
-  hit: boolean;
-  value: T | null;
-}
-
-export interface CacheStats {
-  hits: number;
-  misses: number;
-  keys: number;
-}
-
-// Cache operation types
-export type CacheGet = <T>(key: string) => Promise<T | null>;
-export type CacheSet = <T>(key: string, value: T, ttl?: number) => Promise<void>;
-export type CacheDelete = (key: string) => Promise<void>;
-export type CacheClear = () => Promise<void>;
-export type CacheKeys = () => Promise<string[]>;
-
-export interface CacheOperations {
-  get: CacheGet;
-  set: CacheSet;
-  delete: CacheDelete;
-  clear: CacheClear;
-  keys: CacheKeys;
-}

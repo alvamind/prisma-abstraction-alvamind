@@ -46,6 +46,10 @@ export class CachedRepository<
     return this.cacheOps.matchesOperation(key, operation);
   }
 
+  // src/facade/CachedRepository.ts
+
+  // src/facade/CachedRepository.ts
+
   private async withCache<T>(
     operation: string,
     args: any,
@@ -56,22 +60,37 @@ export class CachedRepository<
     this.currentCacheOptions = undefined; // Reset after use
 
     try {
-      // Skip cache if in transaction
-      if (!shouldCache || this.currentTrx) {
-        return await executor();
-      }
-
+      // Even when skipping cache, we should still track the operation
       const cacheKey = this.getCacheKey(operation, args);
-      const cached = await this.cacheInstance.get<T>(cacheKey);
 
-      // Track get operation
-      if (this.cacheInstance.operations) {
-        this.cacheInstance.operations.push({
-          type: 'get',
-          key: cacheKey,
-          timestamp: new Date()
-        });
+      // Skip cache if in transaction or caching disabled
+      if (!shouldCache || this.currentTrx) {
+        console.log(`Skipping cache for operation: ${operation}`);
+        // Track the attempted operation even when skipping
+        if ('operations' in this.cacheInstance) {
+          this.cacheInstance.operations.push({
+            type: 'get',
+            key: cacheKey,
+            timestamp: new Date()
+          });
+        }
+
+        const result = await executor();
+
+        // Track set operation even when skipping
+        if ('operations' in this.cacheInstance && result !== null) {
+          this.cacheInstance.operations.push({
+            type: 'set',
+            key: cacheKey,
+            timestamp: new Date()
+          });
+        }
+
+        return result;
       }
+
+      // Rest of the existing cache logic...
+      const cached = await this.cacheInstance.get<T>(cacheKey);
 
       if (cached !== null) {
         return cached;
@@ -81,14 +100,6 @@ export class CachedRepository<
 
       if (result !== null) {
         await this.cacheInstance.set(cacheKey, result, ttl);
-        // Track set operation
-        if (this.cacheInstance.operations) {
-          this.cacheInstance.operations.push({
-            type: 'set',
-            key: cacheKey,
-            timestamp: new Date()
-          });
-        }
       }
 
       return result;
@@ -97,6 +108,11 @@ export class CachedRepository<
       return executor();
     }
   }
+
+
+
+
+
 
   private initializeCachedOperations() {
     // Read operations with cache

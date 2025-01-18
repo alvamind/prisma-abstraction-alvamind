@@ -85,14 +85,13 @@ class TestCache implements Cache {
   operations: CacheOperation[] = [];
 
   async get<T>(key: string): Promise<T | null> {
-    const item = this.store.get(key);
-
     this.operations.push({
       type: 'get',
       key,
       timestamp: new Date()
     });
 
+    const item = this.store.get(key);
     if (!item || (item.expires && item.expires < Date.now())) {
       this.misses++;
       return null;
@@ -102,7 +101,8 @@ class TestCache implements Cache {
     return item.value as T;
   }
 
-  async set<T>(key: string, value: T, ttl: number = 3600): Promise<void> {
+  async set<T>(key: string, value: T, ttl = 3600): Promise<void> {
+    console.log(`Setting cache key: ${key} with TTL: ${ttl}`);
     this.operations.push({
       type: 'set',
       key,
@@ -111,7 +111,7 @@ class TestCache implements Cache {
 
     this.store.set(key, {
       value,
-      expires: ttl ? Date.now() + (ttl * 1000) : 0
+      expires: Date.now() + (ttl * 1000)
     });
   }
 
@@ -122,8 +122,8 @@ class TestCache implements Cache {
       timestamp: new Date()
     });
 
-    if (key.includes('*')) {
-      const prefix = key.replace('*', '');
+    if (key.endsWith('*')) {
+      const prefix = key.slice(0, -1);
       for (const storeKey of this.store.keys()) {
         if (storeKey.startsWith(prefix)) {
           this.store.delete(storeKey);
@@ -1354,7 +1354,12 @@ describe('Prisma Abstraction', () => {
 
       await repo.findUnique({ where: { id: user.id } });
 
-      const operation = testCache.operations.find(op => op.type === 'set');
+      // Type-safe operation finding
+      const operation = [...testCache.operations]
+        .reverse()
+        .find((op): op is CacheOperation => op.type === 'set');
+
+      expect(operation).toBeDefined();
       const customKey = customSanitizer(`user:findUnique:{"where":{"id":"${user.id}"}}`);
       expect(operation?.key).toBe(customKey);
     });

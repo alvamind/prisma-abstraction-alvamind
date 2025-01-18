@@ -38,7 +38,14 @@ export type ModelOperationTypes<T extends PrismaClientType, M extends ModelNames
   count: number;
 };
 
-// Cache Types
+export type CacheOperationType = 'get' | 'set' | 'delete' | 'clear';
+
+export interface CacheOperation {
+  type: CacheOperationType;
+  key: string;
+  timestamp: Date;
+}
+
 export interface Cache {
   get<T>(key: string): Promise<T | null>;
   set<T>(key: string, value: T, ttl?: number): Promise<void>;
@@ -58,12 +65,6 @@ export interface CacheConfig {
   defaultTTL?: number;
   cacheKeySanitizer?: (key: string) => string | undefined;
 }
-
-export type CacheOperation = {
-  type: 'get' | 'set' | 'delete' | 'clear';
-  key: string;
-  timestamp: Date;
-};
 
 export type FlushPattern =
   | {
