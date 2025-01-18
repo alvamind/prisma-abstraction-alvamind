@@ -11,6 +11,9 @@ import { PrismaClient } from '@prisma/client';
 import { Sql } from '@prisma/client/runtime/library';
 import { getConfig } from '../config/config';
 import { withTimeout } from '../utils/utils';
+import { createDecoratedOperationFactory } from '../decorators/operationDecorator';
+import { makeCacheable } from '../decorators/cache';
+
 
 export function createOperations<
   T extends PrismaClientType,
@@ -165,7 +168,6 @@ export function createOperations<
         'count'
       );
     },
-
     // Raw operations using prisma instance
     $executeRaw: async (query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> => {
       return executeWithTimeout(
@@ -190,7 +192,6 @@ export function createOperations<
         '$queryRaw'
       );
     },
-
     // Transaction operation using prisma instance
     $transaction: async <P>(
       fn: (prisma: TransactionClient) => Promise<P>,
@@ -211,7 +212,19 @@ export function createOperations<
         '$transaction'
       );
     },
+
   };
+  const decoratedOperations = createDecoratedOperationFactory<T, Model>(modelName);
+  return {
+    ...operations,
+    $queryRaw: makeCacheable(operations.$queryRaw, {
+      cache: () => { },
+      flushAll: () => { return Promise.resolve() },
+      flushExact: () => { return Promise.resolve() },
+      flushOperation: () => { return Promise.resolve() },
+    }),
+  };
+
 
   // Helper functions for soft delete
   async function softDelete(
@@ -242,7 +255,7 @@ export function createOperations<
     });
   }
 
-  return operations;
+
 }
 
 export type Operations<

@@ -90,6 +90,7 @@ export function setConfig(config: Partial<Config>): void {
         ...config.transactionOptions,
       }
       : globalConfig.transactionOptions,
+    logger: config.logger ? { ...defaultLogger, ...config.logger } : globalConfig.logger
   };
 
   // Validate configuration
