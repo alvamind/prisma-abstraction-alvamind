@@ -5,7 +5,7 @@ import { BaseRepository, CachedRepository, setPrismaClient, setConfig, Cache, Ca
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { setTimeout } from 'timers/promises';
-import { defaultSanitizeKey } from "../src/utils";
+import { defaultSanitizeKey } from "../src/utils/utils";
 
 // Unique database name for isolation
 const TEST_DB_NAME = `test_db_${randomUUID().replace(/-/g, '_')}`;
@@ -85,8 +85,13 @@ class TestCache implements Cache {
   operations: CacheOperation[] = [];
 
   async get<T>(key: string): Promise<T | null> {
-    this.operations.push({ type: 'get', key, timestamp: new Date() });
     const item = this.store.get(key);
+
+    this.operations.push({
+      type: 'get',
+      key,
+      timestamp: new Date()
+    });
 
     if (!item || (item.expires && item.expires < Date.now())) {
       this.misses++;
@@ -97,19 +102,28 @@ class TestCache implements Cache {
     return item.value as T;
   }
 
-  async set<T>(key: string, value: T, ttl: number): Promise<void> {
-    this.operations.push({ type: 'set', key, timestamp: new Date() });
+  async set<T>(key: string, value: T, ttl: number = 3600): Promise<void> {
+    this.operations.push({
+      type: 'set',
+      key,
+      timestamp: new Date()
+    });
+
     this.store.set(key, {
       value,
-      expires: Date.now() + (ttl * 1000)
+      expires: ttl ? Date.now() + (ttl * 1000) : 0
     });
   }
 
   async delete(key: string): Promise<void> {
-    this.operations.push({ type: 'delete', key, timestamp: new Date() });
+    this.operations.push({
+      type: 'delete',
+      key,
+      timestamp: new Date()
+    });
 
-    if (key.endsWith('*')) {
-      const prefix = key.slice(0, -1);
+    if (key.includes('*')) {
+      const prefix = key.replace('*', '');
       for (const storeKey of this.store.keys()) {
         if (storeKey.startsWith(prefix)) {
           this.store.delete(storeKey);
@@ -121,7 +135,12 @@ class TestCache implements Cache {
   }
 
   async clear(): Promise<void> {
-    this.operations.push({ type: 'clear', key: '*', timestamp: new Date() });
+    this.operations.push({
+      type: 'clear',
+      key: '*',
+      timestamp: new Date()
+    });
+
     this.store.clear();
     this.hits = 0;
     this.misses = 0;
@@ -383,7 +402,7 @@ describe('Prisma Abstraction', () => {
     it('should handle successful transactions', async () => {
       try {
         const [user1, user2] = await new UserRepository().$transaction(async (trx) => {
-          const u1 = await new UserRepository().trx(trx).create({
+          const u1 = await new UserRepository().trx(trx).create({  // Fixed: added 'create'
             data: { email: 'test.trx1@example.com', name: 'Trx User 1' }
           });
 
@@ -396,7 +415,6 @@ describe('Prisma Abstraction', () => {
         expect(user1.email).toBe('test.trx1@example.com');
         expect(user2.email).toBe('test.trx2@example.com');
       } catch (e) {
-
         throw e;
       }
     });
