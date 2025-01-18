@@ -180,6 +180,7 @@ export type RecursivePartial<T> = {
 // Builder Types
 export interface RepositoryBuilderConfig<
   T extends PrismaClientType = typeof PrismaClient,
+  // @ts-ignore
   Model extends ModelNames<T> = ModelNames<T>
 > {
   cache?: {

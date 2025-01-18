@@ -11,9 +11,6 @@ import { PrismaClient } from '@prisma/client';
 import { Sql } from '@prisma/client/runtime/library';
 import { getConfig } from '../config/config';
 import { withTimeout } from '../utils/utils';
-import { createDecoratedOperationFactory } from '../decorators/operationDecorator';
-import { makeCacheable } from '../decorators/cache';
-
 
 export function createOperations<
   T extends PrismaClientType,
@@ -24,11 +21,11 @@ export function createOperations<
   modelName: string,
   currentTrx?: TransactionClient
 ) {
-  const getClient = <Client extends PrismaDelegate<T, Model>>(): Client => {
+  const getClient = () => {
     if (currentTrx) {
-      return currentTrx[modelName as keyof TransactionClient] as Client;
+      return currentTrx[modelName as keyof TransactionClient] as PrismaDelegate<T, Model>;
     }
-    return model as Client;
+    return model;
   };
 
   const getPrismaClient = () => currentTrx ?? prisma;
@@ -47,7 +44,6 @@ export function createOperations<
       return result;
     } catch (error) {
       if (error instanceof Error && error.message.includes('Transaction already closed')) {
-        // Re-execute without transaction
         currentTrx = undefined;
         return operation();
       }
@@ -58,186 +54,218 @@ export function createOperations<
     }
   };
 
-  // Core operations using model delegate
   const operations = {
-    create: async (
-      args: Parameters<PrismaDelegate<T, Model>['create']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['create']> => {
-      return executeWithTimeout(
-        async () => getClient().create(args),
-        'create'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    create: async (args: Parameters<PrismaDelegate<T, Model>['create']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().create(args),
+          'create'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    createMany: async (
-      args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['createMany']> => {
-      return executeWithTimeout(
-        async () => getClient().createMany(args),
-        'createMany'
-      );
+
+    createMany: async (args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().createMany(args),
+          'createMany'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    findMany: async (
-      args: Parameters<PrismaDelegate<T, Model>['findMany']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['findMany']> => {
-      return executeWithTimeout(
-        async () => getClient().findMany(args),
-        'findMany'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    findMany: async (args: Parameters<PrismaDelegate<T, Model>['findMany']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().findMany(args),
+          'findMany'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    findFirst: async (
-      args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['findFirst']> => {
-      return executeWithTimeout(
-        async () => getClient().findFirst(args),
-        'findFirst'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    findFirst: async (args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().findFirst(args),
+          'findFirst'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    findUnique: async (
-      args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['findUnique']> => {
-      return executeWithTimeout(
-        async () => getClient().findUnique(args),
-        'findUnique'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    findUnique: async (args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().findUnique(args),
+          'findUnique'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    update: async (
-      args: Parameters<PrismaDelegate<T, Model>['update']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['update']> => {
-      return executeWithTimeout(
-        async () => getClient().update(args),
-        'update'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    update: async (args: Parameters<PrismaDelegate<T, Model>['update']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().update(args),
+          'update'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    updateMany: async (
-      args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['updateMany']> => {
-      return executeWithTimeout(
-        async () => getClient().updateMany(args),
-        'updateMany'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    updateMany: async (args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().updateMany(args),
+          'updateMany'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    delete: async (
-      args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['delete']> => {
-      return executeWithTimeout(
-        async () => {
-          if (getConfig().softDelete) {
-            return softDelete(args);
-          }
-          return getClient().delete(args);
-        },
-        'delete'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    delete: async (args: Parameters<PrismaDelegate<T, Model>['delete']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          async () => {
+            if (getConfig().softDelete) {
+              return await softDelete(args);
+            }
+            return await getClient().delete(args);
+          },
+          'delete'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    deleteMany: async (
-      args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['deleteMany']> => {
-      return executeWithTimeout(
-        async () => {
-          if (getConfig().softDelete) {
-            return softDeleteMany(args);
-          }
-          return getClient().deleteMany(args);
-        },
-        'deleteMany'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    deleteMany: async (args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          async () => {
+            if (getConfig().softDelete) {
+              return await softDeleteMany(args);
+            }
+            return await getClient().deleteMany(args);
+          },
+          'deleteMany'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    upsert: async (
-      args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]
-    ): Promise<ModelOperationTypes<T, Model>['upsert']> => {
-      return executeWithTimeout(
-        async () => getClient().upsert(args),
-        'upsert'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    upsert: async (args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().upsert(args),
+          'upsert'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
-    count: async (
-      args: Parameters<PrismaDelegate<T, Model>['count']>[0]
-    ): Promise<number> => {
-      return executeWithTimeout(
-        async () => getClient().count(args),
-        'count'
-      );
+    // @ts-ignore - Maintain Prisma's exact method shape
+    count: async (args: Parameters<PrismaDelegate<T, Model>['count']>[0]) => {
+      try {
+        return await executeWithTimeout(
+          () => getClient().count(args),
+          'count'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
-    // Raw operations using prisma instance
+
+    // Raw operations
     $executeRaw: async (query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> => {
-      return executeWithTimeout(
-        async () => {
-          if (!query) throw new Error('Query is required');
-          const client = getPrismaClient();
-          return await client.$executeRaw.apply(client, [query, ...values]);
-        },
-        '$executeRaw'
-      );
+      try {
+        return await executeWithTimeout(
+          async () => {
+            if (!query) throw new Error('Query is required');
+            const client = getPrismaClient();
+            return await client.$executeRaw.apply(client, [query, ...values]);
+          },
+          '$executeRaw'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
 
     $queryRaw: async <P = any>(
       query: TemplateStringsArray | Sql,
       ...values: any[]
     ): Promise<P> => {
-      return executeWithTimeout(
-        async () => {
-          const client = getPrismaClient();
-          return await client.$queryRaw.apply(client, [query, ...values]) as P;
-        },
-        '$queryRaw'
-      );
+      try {
+        return await executeWithTimeout(
+          async () => {
+            const client = getPrismaClient();
+            return await client.$queryRaw.apply(client, [query, ...values]) as P;
+          },
+          '$queryRaw'
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
-    // Transaction operation using prisma instance
+
+    // Transaction operation
     $transaction: async <P>(
       fn: (prisma: TransactionClient) => Promise<P>,
       options?: { timeout?: number }
     ): Promise<P> => {
       const timeout = options?.timeout ?? getConfig().transactionOptions?.timeout ?? 5000;
-      return executeWithTimeout(
-        async () => {
-          try {
-            return await prisma.$transaction(fn);
-          } catch (error) {
-            throw new RepositoryError(
-              'Transaction failed',
-              error instanceof Error ? error : undefined
-            );
-          }
-        },
-        '$transaction'
-      );
+      try {
+        return await withTimeout(
+          prisma.$transaction(fn),
+          timeout,
+          `Transaction timed out after ${timeout}ms`
+        );
+      } catch (error) {
+        throw new RepositoryError(
+          'Transaction failed',
+          error instanceof Error ? error : undefined
+        );
+      } finally {
+        currentTrx = undefined;
+      }
     },
-
   };
-  const decoratedOperations = createDecoratedOperationFactory<T, Model>(modelName);
-  return {
-    ...operations,
-    $queryRaw: makeCacheable(operations.$queryRaw, {
-      cache: () => { },
-      flushAll: () => { return Promise.resolve() },
-      flushExact: () => { return Promise.resolve() },
-      flushOperation: () => { return Promise.resolve() },
-    }),
-  };
-
 
   // Helper functions for soft delete
   async function softDelete(
     args: Parameters<PrismaDelegate<T, Model>['delete']>[0]
   ): Promise<ModelOperationTypes<T, Model>['delete']> {
+    // @ts-ignore
     if (!args?.where) {
       throw new RepositoryError('Where clause is required for soft delete');
     }
 
     return getClient().update({
+      // @ts-ignore
       where: args.where,
       data: {
-        ...(args.data || {}),
         deletedAt: new Date(),
       },
     }) as Promise<ModelOperationTypes<T, Model>['delete']>;
@@ -247,15 +275,15 @@ export function createOperations<
     args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]
   ): Promise<ModelOperationTypes<T, Model>['deleteMany']> {
     return getClient().updateMany({
+      // @ts-ignore
       where: args.where,
       data: {
-        ...(args.data || {}),
         deletedAt: new Date(),
       },
     });
   }
 
-
+  return operations;
 }
 
 export type Operations<

@@ -102,7 +102,6 @@ class TestCache implements Cache {
   }
 
   async set<T>(key: string, value: T, ttl = 3600): Promise<void> {
-    console.log(`Setting cache key: ${key} with TTL: ${ttl}`);
     this.operations.push({
       type: 'set',
       key,
@@ -304,8 +303,12 @@ describe('Prisma Abstraction', () => {
     it('should properly initialize with logger', () => {
       setConfig({ logger: testLogger });
       new UserRepository();
-      expect(testLogger.logs).toHaveLength(1);
-      expect(testLogger.logs[0].message).toContain('Repository initialized');
+
+      // Check for initialization log
+      const infoLogs = testLogger.getLogsByLevel('info');
+      expect(infoLogs).toHaveLength(1);
+      expect(infoLogs[0].message).toContain('Repository initialized');
+      expect(infoLogs[0].message).toContain('user'); // Check for model name
     });
 
     it('should work without logger', () => {

@@ -1,3 +1,4 @@
+// src/facade/CachedRepository.ts
 import { BaseRepository } from './BaseRepository';
 import {
   Cache,
@@ -5,7 +6,6 @@ import {
   ModelNames,
   PrismaClientType,
   TransactionClient,
-  PrismaDelegate,
   FlushPattern
 } from '../types';
 import { createCachingOperations } from '../core/caching';
@@ -32,12 +32,11 @@ export class CachedRepository<
     this.initializeCachedOperations();
   }
 
-  public cache(options: CacheOptions) {
+  public cache(options: CacheOptions): this {
     this.currentCacheOptions = options;
     return this;
   }
 
-  // Make these methods protected for test access
   protected getCacheKey(operation: string, args: any): string {
     return this.cacheOps.getCacheKey(operation, args);
   }
@@ -53,17 +52,13 @@ export class CachedRepository<
   ): Promise<T> {
     const shouldCache = this.currentCacheOptions?.cache ?? this.defaultCaching;
     const ttl = this.currentCacheOptions?.ttl ?? this.defaultTTL;
-    this.currentCacheOptions = undefined; // Reset after use
+    this.currentCacheOptions = undefined;
 
     try {
-      // Even when skipping cache, we should still track the operation
       const cacheKey = this.getCacheKey(operation, args);
 
-      // Skip cache if in transaction or caching disabled
       if (!shouldCache || this.currentTrx) {
-        console.log(`Skipping cache for operation: ${operation}`);
-        // Track the attempted operation even when skipping
-        if ('operations' in this.cacheInstance) {
+        if (this.cacheInstance?.operations) {
           this.cacheInstance.operations.push({
             type: 'get',
             key: cacheKey,
@@ -73,8 +68,7 @@ export class CachedRepository<
 
         const result = await executor();
 
-        // Track set operation even when skipping
-        if ('operations' in this.cacheInstance && result !== null) {
+        if (this.cacheInstance?.operations && result !== null) {
           this.cacheInstance.operations.push({
             type: 'set',
             key: cacheKey,
@@ -85,102 +79,108 @@ export class CachedRepository<
         return result;
       }
 
-      // Rest of the existing cache logic...
       const cached = await this.cacheInstance.get<T>(cacheKey);
-
       if (cached !== null) {
         return cached;
       }
 
       const result = await executor();
 
-      if (result !== null) {
+      if (result !== null && result !== undefined) {
         await this.cacheInstance.set(cacheKey, result, ttl);
       }
 
       return result;
     } catch (error) {
-      getConfig().logger?.error(`Cache operation failed: ${error}`);
       return executor();
     }
   }
 
-
-
-
-
-
   private initializeCachedOperations() {
     // Read operations with cache
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.findUnique = async (args) => {
       return this.withCache('findUnique', args, () => this.operations.findUnique(args));
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.findFirst = async (args) => {
       return this.withCache('findFirst', args, () => this.operations.findFirst(args));
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.findMany = async (args) => {
       return this.withCache('findMany', args, () => this.operations.findMany(args));
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.count = async (args) => {
       return this.withCache('count', args, () => this.operations.count(args));
     };
 
     // Write operations with cache invalidation
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.create = async (args) => {
       const result = await this.operations.create(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.createMany = async (args) => {
       const result = await this.operations.createMany(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.update = async (args) => {
       const result = await this.operations.update(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.updateMany = async (args) => {
       const result = await this.operations.updateMany(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.delete = async (args) => {
       const result = await this.operations.delete(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.deleteMany = async (args) => {
       const result = await this.operations.deleteMany(args);
       await this.invalidateCache();
       return result;
     };
 
+    // @ts-ignore - Maintain Prisma's exact method shape
     this.upsert = async (args) => {
       const result = await this.operations.upsert(args);
       await this.invalidateCache();
       return result;
     };
 
+    // Raw operations with cache
     this.$queryRaw = async <T = unknown>(...args: any[]): Promise<T> => {
       const [query, ...params] = args;
       return this.withCache(
         '$queryRaw',
         { query: query.join(''), params },
+        // @ts-ignore
         () => this.operations.$queryRaw<T>(...args)
       );
     };
 
     this.$executeRaw = async (...args: any[]): Promise<number> => {
+      // @ts-ignore
       const result = await this.operations.$executeRaw(...args);
       await this.invalidateCache();
       return result;

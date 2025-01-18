@@ -62,24 +62,6 @@ export function deepClone<T>(obj: T): T {
   return obj;
 }
 
-export function deepMerge<T extends AnyRecord>(target: T, source: Partial<T>): T {
-  const result = { ...target };
-
-  for (const key in source) {
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      const sourceValue = source[key];
-      const targetValue = target[key];
-
-      if (isObject(sourceValue) && isObject(targetValue)) {
-        result[key] = deepMerge(targetValue, sourceValue) as T[typeof key];
-      } else {
-        result[key] = deepClone(sourceValue) as T[typeof key];
-      }
-    }
-  }
-
-  return result;
-}
 
 /**
  * String manipulation utilities

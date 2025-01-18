@@ -35,14 +35,14 @@ export {
   type CachedOperation
 } from './decorators/cache';
 
-export {
-  createTransactionDecorator,
-  executeTransaction,
-  isInTransaction,
-  getTransactionClient,
-  type WithTransaction,
-  type TransactionOptions
-} from './decorators/transaction';
+// export {
+//   createTransactionDecorator,
+//   executeTransaction,
+//   isInTransaction,
+//   getTransactionClient,
+//   type WithTransaction,
+//   type TransactionOptions
+// } from './decorators/transaction';
 
 // Configuration exports
 export {

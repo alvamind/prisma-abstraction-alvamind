@@ -5,13 +5,15 @@
 // export class UserController extends UserRepository {
 
 //   async createUser(email: string, name: string) {
-//     return await this.create({
-//       data: { email, name }
+//     const abc = await this.create({
+//       data: { email, name }, select: { id: true }
 //     });
+
+//     return abc;
 //   }
 
 //   async findUserById(id: number) {
-//     const abc = await this.trx(trx).findMany({
+//     const abc = await this.findMany({
 //       where: { id: "sadas" }, select: { id: true, email: true }
 //     });
 

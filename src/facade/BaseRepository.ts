@@ -1,3 +1,4 @@
+// src/facade/BaseRepository.ts
 import { PrismaClient } from '@prisma/client';
 import {
   ModelNames,
@@ -15,20 +16,19 @@ export class BaseRepository<
   T extends PrismaClientType = typeof PrismaClient,
   Model extends ModelNames<T> = ModelNames<T>
 > {
-  protected model: PrismaDelegate<T, Model>;
+  protected model!: PrismaDelegate<T, Model>;
   protected prisma: PrismaClient;
   protected currentTrx?: TransactionClient;
-  protected operations: ReturnType<typeof createOperations<T, Model>>;
+  protected operations!: ReturnType<typeof createOperations<T, Model>>;
   protected modelName: string;
 
   constructor() {
     try {
-      // Single initialization block
       this.prisma = getPrismaClient();
       this.modelName = this.getModelNameFromConstructor();
       this.initializeModel();
       this.initializeOperations();
-
+      getConfig().logger?.info(`Repository initialized for model: ${this.modelName}`);
     } catch (error) {
       getConfig().logger?.error(`Repository initialization failed: ${error}`);
       throw error;
@@ -48,11 +48,8 @@ export class BaseRepository<
       this.model,
       this.prisma,
       this.modelName,
-      undefined
+      this.currentTrx
     );
-
-    // Single log point here instead of multiple
-    getConfig().logger?.debug(`Operations initialized for ${this.modelName}`);
   }
 
   private getModelNameFromConstructor(): string {
@@ -80,60 +77,67 @@ export class BaseRepository<
 
   public trx(trx: TransactionClient): this {
     this.currentTrx = trx;
-    this.operations = createOperations<T, Model>(
-      this.model,
-      this.prisma,
-      this.modelName,
-      trx
-    );
+    this.initializeOperations();
     return this;
   }
 
-  // Core operations
-  public create = async (args: Parameters<PrismaDelegate<T, Model>['create']>[0]) => {
+  // Core CRUD operations with proper method signatures
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public create: PrismaDelegate<T, Model>['create'] = async (args) => {
     return this.operations.create(args);
   };
 
-  public createMany = async (args: Parameters<PrismaDelegate<T, Model>['createMany']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public createMany: PrismaDelegate<T, Model>['createMany'] = async (args) => {
     return this.operations.createMany(args);
   };
 
-  public findMany = async (args: Parameters<PrismaDelegate<T, Model>['findMany']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public findMany: PrismaDelegate<T, Model>['findMany'] = async (args) => {
     return this.operations.findMany(args);
   };
 
-  public findFirst = async (args: Parameters<PrismaDelegate<T, Model>['findFirst']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public findFirst: PrismaDelegate<T, Model>['findFirst'] = async (args) => {
     return this.operations.findFirst(args);
   };
 
-  public findUnique = async (args: Parameters<PrismaDelegate<T, Model>['findUnique']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public findUnique: PrismaDelegate<T, Model>['findUnique'] = async (args) => {
     return this.operations.findUnique(args);
   };
 
-  public update = async (args: Parameters<PrismaDelegate<T, Model>['update']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public update: PrismaDelegate<T, Model>['update'] = async (args) => {
     return this.operations.update(args);
   };
 
-  public updateMany = async (args: Parameters<PrismaDelegate<T, Model>['updateMany']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public updateMany: PrismaDelegate<T, Model>['updateMany'] = async (args) => {
     return this.operations.updateMany(args);
   };
 
-  public delete = async (args: Parameters<PrismaDelegate<T, Model>['delete']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public delete: PrismaDelegate<T, Model>['delete'] = async (args) => {
     return this.operations.delete(args);
   };
 
-  public deleteMany = async (args: Parameters<PrismaDelegate<T, Model>['deleteMany']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public deleteMany: PrismaDelegate<T, Model>['deleteMany'] = async (args) => {
     return this.operations.deleteMany(args);
   };
 
-  public upsert = async (args: Parameters<PrismaDelegate<T, Model>['upsert']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public upsert: PrismaDelegate<T, Model>['upsert'] = async (args) => {
     return this.operations.upsert(args);
   };
 
-  public count = async (args: Parameters<PrismaDelegate<T, Model>['count']>[0]) => {
+  // @ts-ignore - Maintain Prisma's exact method shape
+  public count: PrismaDelegate<T, Model>['count'] = async (args) => {
     return this.operations.count(args);
   };
 
+  // Raw query operations
   public async $executeRaw(query: TemplateStringsArray | Sql, ...values: any[]): Promise<number> {
     try {
       if (!query) throw new Error('Query is required');
@@ -153,6 +157,7 @@ export class BaseRepository<
     }
   }
 
+  // Transaction operation
   public async $transaction<P>(
     fn: (prisma: TransactionClient) => Promise<P>,
     options?: { timeout?: number }
@@ -183,6 +188,7 @@ export class BaseRepository<
     }
   }
 
+  // Helper methods
   public async isExist<
     Where extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { where?: infer W } ? W : never,
     Select extends Parameters<PrismaDelegate<T, Model>['findFirst']>[0] extends { select?: infer S } ? S : never

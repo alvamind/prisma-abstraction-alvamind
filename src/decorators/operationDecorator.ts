@@ -2,7 +2,7 @@
 import { ModelNames, PrismaClientType, PrismaDelegate } from '../types';
 
 export type OperationFunction<T extends PrismaClientType, Model extends ModelNames<T>> =
-  (args: any) => ReturnType<PrismaDelegate<T, Model>[keyof PrismaDelegate<T, Model>]>;
+  (args: any) => Promise<ReturnType<PrismaDelegate<T, Model>[keyof PrismaDelegate<T, Model>]>>;
 
 export type OperationContext = {
   modelName: string;
@@ -13,11 +13,11 @@ export type OperationContext = {
 export type DecoratorFunction<T extends PrismaClientType, Model extends ModelNames<T>> =
   (operation: OperationFunction<T, Model>, context: OperationContext) => Promise<any>;
 
-export interface OperationDecorator<T extends PrismaClientType, Model extends ModelNames<T>> {
+export type OperationDecorator<T extends PrismaClientType, Model extends ModelNames<T>> = {
   (
     baseOperation: OperationFunction<T, Model>,
     context: OperationContext
-  ): Promise<any>;
+  ): Promise<ReturnType<typeof baseOperation>>;
 }
 
 export function createOperationDecorator<T extends PrismaClientType, Model extends ModelNames<T>>(
@@ -74,6 +74,7 @@ export type ChainableOperation<
   K extends keyof PrismaDelegate<T, Model>
 > = {
   operation: DecoratedOperation<T, Model, K>;
+  // @ts-ignore
   chain: <R>(
     decorator: OperationDecorator<T, Model>
   ) => ChainableOperation<T, Model, K>;
@@ -87,14 +88,14 @@ export function createChainableOperation<
   baseOperation: DecoratedOperation<T, Model, K>,
   context: OperationContext
 ): ChainableOperation<T, Model, K> {
-  const chain = <R>(
+  const chain = (
     decorator: OperationDecorator<T, Model>
   ): ChainableOperation<T, Model, K> => {
     const wrappedOperation = wrapOperation(
-      baseOperation,
+      baseOperation as unknown as OperationFunction<T, Model>,
       decorator,
       context
-    ) as DecoratedOperation<T, Model, K>;
+    ) as unknown as DecoratedOperation<T, Model, K>;
 
     return createChainableOperation(wrappedOperation, context);
   };

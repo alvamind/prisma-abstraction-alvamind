@@ -9,17 +9,17 @@ export function createCachingOperations(
 ) {
   const getCacheKey = (operation: string, args: any): string => {
     const key = `${modelName.toLowerCase()}:${operation.toLowerCase()}:${JSON.stringify(args)}`;
-    console.log(`Generated raw cache key: ${key}`);
+
 
     const config = getConfig();
     if (config.cacheConfig?.cacheKeySanitizer) {
       const sanitized = config.cacheConfig.cacheKeySanitizer(key);
-      console.log(`Sanitized cache key: ${sanitized}`);
+
       if (sanitized) return sanitized;
     }
 
     const defaultKey = defaultSanitizeKey(key);
-    console.log(`Default sanitized cache key: ${defaultKey}`);
+
     return defaultKey;
   };
 
@@ -39,7 +39,6 @@ export function createCachingOperations(
   const matchesOperation = (key: string, operation: string): boolean => {
     const operationPattern = `${modelName.toLowerCase()}:${operation.toLowerCase()}:`;
     const decodedKey = decodeKey(key).toLowerCase();
-    console.log(`Checking if key matches operation: ${decodedKey} includes ${operationPattern}`);
     return decodedKey.includes(operationPattern);
   };
 

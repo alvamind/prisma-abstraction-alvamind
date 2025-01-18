@@ -183,7 +183,7 @@ export function isCachedRepository<
  */
 export interface RepositoryConfig<
   T extends PrismaClientType = typeof PrismaClient,
-  Model extends ModelNames<T> = ModelNames<T>
+  _Model extends ModelNames<T> = ModelNames<T>
 > {
   cache?: {
     instance: Cache;
