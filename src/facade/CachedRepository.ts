@@ -46,10 +46,6 @@ export class CachedRepository<
     return this.cacheOps.matchesOperation(key, operation);
   }
 
-  // src/facade/CachedRepository.ts
-
-  // src/facade/CachedRepository.ts
-
   private async withCache<T>(
     operation: string,
     args: any,
@@ -60,24 +56,29 @@ export class CachedRepository<
     this.currentCacheOptions = undefined; // Reset after use
 
     try {
-      // Even when skipping cache, we should still track the operation
-      const cacheKey = this.getCacheKey(operation, args);
+      // Generate cache key based on operation type
+      const cacheKey = operation === '$queryRaw'
+        ? this.cacheOps.getCacheKey(operation, this.hashRawQuery(args))
+        : this.cacheOps.getCacheKey(operation, args);
+
+      // Track operation attempt
+      if ('operations' in this.cacheInstance) {
+        this.cacheInstance.operations.push({
+          type: 'get',
+          key: cacheKey,
+          timestamp: new Date()
+        });
+      }
 
       // Skip cache if in transaction or caching disabled
       if (!shouldCache || this.currentTrx) {
-        console.log(`Skipping cache for operation: ${operation}`);
-        // Track the attempted operation even when skipping
-        if ('operations' in this.cacheInstance) {
-          this.cacheInstance.operations.push({
-            type: 'get',
-            key: cacheKey,
-            timestamp: new Date()
-          });
-        }
+        getConfig().logger?.debug(`Skipping cache for operation: ${operation}`, {
+          reason: !shouldCache ? 'caching disabled' : 'in transaction'
+        });
 
         const result = await executor();
 
-        // Track set operation even when skipping
+        // Track operation even when skipping cache
         if ('operations' in this.cacheInstance && result !== null) {
           this.cacheInstance.operations.push({
             type: 'set',
@@ -89,25 +90,90 @@ export class CachedRepository<
         return result;
       }
 
-      // Rest of the existing cache logic...
-      const cached = await this.cacheInstance.get<T>(cacheKey);
+      // Try to get from cache
+      let cached: T | null = null;
+      try {
+        cached = await this.cacheInstance.get<T>(cacheKey);
+      } catch (error) {
+        getConfig().logger?.error(`Cache get failed: ${error}`, {
+          operation,
+          key: cacheKey
+        });
+      }
 
+      // If found in cache
       if (cached !== null) {
+        getConfig().logger?.debug(`Cache hit: ${operation}`, {
+          key: cacheKey
+        });
+
+        if ('hits' in this.cacheInstance) {
+          this.cacheInstance.hits++;
+        }
+
         return cached;
       }
 
+      // Cache miss
+      if ('misses' in this.cacheInstance) {
+        this.cacheInstance.misses++;
+      }
+
+      getConfig().logger?.debug(`Cache miss: ${operation}`, {
+        key: cacheKey
+      });
+
+      // Execute original operation
       const result = await executor();
 
+      // Only cache non-null results
       if (result !== null) {
-        await this.cacheInstance.set(cacheKey, result, ttl);
+        try {
+          await this.cacheInstance.set(cacheKey, result, ttl);
+
+          if ('operations' in this.cacheInstance) {
+            this.cacheInstance.operations.push({
+              type: 'set',
+              key: cacheKey,
+              timestamp: new Date()
+            });
+          }
+
+          getConfig().logger?.debug(`Cached result: ${operation}`, {
+            key: cacheKey,
+            ttl
+          });
+        } catch (error) {
+          getConfig().logger?.error(`Cache set failed: ${error}`, {
+            operation,
+            key: cacheKey
+          });
+        }
       }
 
       return result;
+
     } catch (error) {
-      getConfig().logger?.error(`Cache operation failed: ${error}`);
+      // Log error but don't fail the operation
+      getConfig().logger?.error(`Cache operation failed: ${error}`, {
+        operation,
+        args
+      });
+
+      // Fallback to original operation
       return executor();
     }
   }
+
+  // Helper method for raw query hashing
+  private hashRawQuery(args: { query: string; params: any[] }): string {
+    const { query, params } = args;
+    return JSON.stringify({
+      q: query.replace(/\s+/g, ' ').trim(), // Normalize whitespace
+      p: params
+    });
+  }
+
 
 
 
@@ -171,6 +237,21 @@ export class CachedRepository<
 
     this.upsert = async (args) => {
       const result = await this.operations.upsert(args);
+      await this.invalidateCache();
+      return result;
+    };
+
+    this.$queryRaw = async <T = unknown>(...args: any[]): Promise<T> => {
+      const [query, ...params] = args;
+      return this.withCache(
+        '$queryRaw',
+        { query: query.join(''), params },
+        () => this.operations.$queryRaw<T>(...args)
+      );
+    };
+
+    this.$executeRaw = async (...args: any[]): Promise<number> => {
+      const result = await this.operations.$executeRaw(...args);
       await this.invalidateCache();
       return result;
     };
